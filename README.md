@@ -14,7 +14,7 @@ This is a simple, interactive whiteboard application built with plain HTML, CSS,
 
 ![Whiteboard App Demo](screenshot.png)
 
-Try it out ![here](https://businessdatasolutions.github.io/whiteboard/)
+Try it out [here](https://businessdatasolutions.github.io/whiteboard/)
 
 ## How to Use
 
