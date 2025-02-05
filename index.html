@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Whiteboard App with Fixed Pill Container</title>
+  <!-- Materialize CSS for styling -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet">
+  <!-- Material Icons -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    /* Basic page styling */
+    body {
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    #toolbar {
+      margin-bottom: 20px;
+    }
+    /* The whiteboard spans the full area (including extra space for axes) */
+    #whiteboard {
+      position: relative;
+      width: 1250px;  /* 50px left padding + 1200px main grid */
+      height: 850px;  /* 800px main grid + 50px bottom padding */
+      margin: auto;
+      border: 1px solid #ccc;
+      background: #fff;
+    }
+    /* The grid area (for the axes and grid background) */
+    #grid {
+      position: absolute;
+      left: 50px;  /* left padding for y-axis labels */
+      top: 0;
+      width: 1200px;
+      height: 800px;
+      background-image: 
+        linear-gradient(to right, #e0e0e0 1px, transparent 1px),
+        linear-gradient(to bottom, #e0e0e0 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    /* Draggable Post-it notes */
+    .post-it {
+      position: absolute;
+      background: #fffb8f;
+      padding: 10px;
+      min-width: 100px;
+      min-height: 100px;
+      box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+      cursor: move;
+      user-select: none;
+      overflow: auto;
+    }
+    .post-it .content {
+      outline: none;
+      cursor: text;
+    }
+    /* Pill container: spans the whiteboard and holds all pill elements.
+       Using pointer-events: none so it won’t block clicks. */
+    #pill-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 100;
+    }
+    /* The pill itself – note this class is used on the separate pill element */
+    .pill {
+      position: absolute;
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      padding: 2px 5px;
+      border-radius: 10px;
+      font-size: 10px;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 1000;
+    }
+    /* Axis styling */
+    .axis {
+      position: absolute;
+      background: #000;
+      z-index: 1;
+    }
+    /* x-axis: along the bottom of the grid */
+    #x-axis {
+      height: 2px;
+      width: 100%;
+      bottom: 0;
+      left: 0;
+    }
+    /* y-axis: along the left of the grid */
+    #y-axis {
+      width: 2px;
+      height: 100%;
+      top: 0;
+      left: 0;
+    }
+  </style>
+</head>
+<body>
+  <!-- Toolbar -->
+  <div id="toolbar" class="center-align">
+    <a class="waves-effect waves-light btn" id="addPostitBtn">
+      <i class="material-icons left">note_add</i>Add Post-it
+    </a>
+    <a class="waves-effect waves-light btn" id="saveBtn">
+      <i class="material-icons left">save</i>Save as PNG
+    </a>
+    <!-- New Upload Background button -->
+    <a class="waves-effect waves-light btn" id="uploadBackgroundBtn">
+      <i class="material-icons left">image</i>Upload Background
+    </a>
+    <!-- Hidden file input -->
+    <input type="file" id="uploadBackground" accept="image/*" style="display: none;">
+  </div>
+
+  <!-- Whiteboard container -->
+  <div id="whiteboard">
+    <!-- Grid area with axes -->
+    <div id="grid">
+      <div id="x-axis" class="axis"></div>
+      <div id="y-axis" class="axis"></div>
+    </div>
+    <!-- Separate container for all pills -->
+    <div id="pill-container"></div>
+  </div>
+
+  <!-- Scripts -->
+  <!-- Materialize JS (optional for interactions) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <!-- html2canvas for saving as PNG -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script>
+    const whiteboard = document.getElementById('whiteboard');
+    const grid = document.getElementById('grid');
+    const pillContainer = document.getElementById('pill-container');
+    const addPostitBtn = document.getElementById('addPostitBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const uploadBackgroundBtn = document.getElementById('uploadBackgroundBtn');
+    const uploadBackgroundInput = document.getElementById('uploadBackground');
+
+    // Grid parameters (grid is placed at left:50px, top:0 with 1200x800 dimensions)
+    const gridLeft = 50, gridTop = 0, gridWidth = 1200, gridHeight = 800;
+    // Define the axis rectangles (absolute coordinates within the whiteboard)
+    const yAxisRect = { left: gridLeft, top: gridTop, right: gridLeft + 2, bottom: gridTop + gridHeight };
+    const xAxisRect = { left: gridLeft, top: gridTop + gridHeight - 2, right: gridLeft + gridWidth, bottom: gridTop + gridHeight };
+
+    // Helper function to test rectangle intersection.
+    function isIntersecting(rect1, rect2) {
+      return !(rect1.right < rect2.left ||
+               rect1.left > rect2.right ||
+               rect1.bottom < rect2.top ||
+               rect1.top > rect2.bottom);
+    }
+
+    /**
+     * Updates the pill's text (relative position) and moves the pill to a position
+     * that follows the Post-it. In this version, the pill is placed outside the Post-it
+     * at its bottom left (with a 5px gap below). The x-percentage is computed normally,
+     * and the y-percentage is inverted so that the top of the grid is 100% and the bottom is 0%.
+     */
+    function updatePill(elm, newX, newY) {
+      const gridDims = { left: gridLeft, top: gridTop, width: gridWidth, height: gridHeight };
+      let relativeX = ((newX - gridDims.left) / gridDims.width) * 100;
+      let relativeY = (1 - ((newY - gridDims.top) / gridDims.height)) * 100;
+      relativeX = Math.round(relativeX);
+      relativeY = Math.round(relativeY);
+
+      if (elm.pill) {
+        elm.pill.innerText = `${relativeX}%, ${relativeY}%`;
+        // Position the pill at the bottom left of the Post-it (with a 5px gap below)
+        elm.pill.style.left = newX + "px";
+        elm.pill.style.top = (newY + elm.offsetHeight + 5) + "px";
+      }
+    }
+
+    /**
+     * Creates a new draggable Post-it note.
+     * For each Post-it, a separate pill is created and added to the pill container.
+     */
+    function createPostit(x = 100, y = 100, text = "New Post-it") {
+      const postit = document.createElement('div');
+      postit.className = 'post-it';
+      postit.style.left = x + 'px';
+      postit.style.top = y + 'px';
+
+      const content = document.createElement('div');
+      content.className = 'content';
+      content.contentEditable = true;
+      content.innerText = text;
+      
+      // Prevent drag events when clicking inside the content.
+      content.addEventListener('mousedown', (e) => e.stopPropagation());
+      content.addEventListener('touchstart', (e) => e.stopPropagation());
+
+      // **New:** Update the pill position when content changes.
+      content.addEventListener('input', () => {
+        const currentX = parseInt(postit.style.left, 10);
+        const currentY = parseInt(postit.style.top, 10);
+        updatePill(postit, currentX, currentY);
+      });
+
+      postit.appendChild(content);
+      whiteboard.appendChild(postit);
+
+      const pill = document.createElement('div');
+      pill.className = 'pill';
+      pill.innerText = "0%, 0%";
+      pillContainer.appendChild(pill);
+      postit.pill = pill;
+
+      updatePill(postit, x, y);
+      makeDraggable(postit);
+    }
+
+    /**
+     * Makes an element draggable. While dragging, the Post-it’s position is updated,
+     * its background color is adjusted based on axis intersections, and its associated pill
+     * is updated to reflect its new relative position.
+     * If the Post-it touches either axis, its pill is hidden.
+     */
+    function makeDraggable(elm) {
+      let offsetX, offsetY;
+      let isDragging = false;
+
+      elm.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        elm.style.zIndex = Date.now();
+        offsetX = e.clientX - elm.getBoundingClientRect().left;
+        offsetY = e.clientY - elm.getBoundingClientRect().top;
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', function(e) {
+        if (isDragging) {
+          const boardRect = whiteboard.getBoundingClientRect();
+          let newX = e.clientX - boardRect.left - offsetX;
+          let newY = e.clientY - boardRect.top - offsetY;
+          newX = Math.max(0, Math.min(newX, boardRect.width - elm.offsetWidth));
+          newY = Math.max(0, Math.min(newY, boardRect.height - elm.offsetHeight));
+          elm.style.left = newX + 'px';
+          elm.style.top = newY + 'px';
+
+          updatePill(elm, newX, newY);
+
+          const noteRect = {
+            left: newX,
+            top: newY,
+            right: newX + elm.offsetWidth,
+            bottom: newY + elm.offsetHeight
+          };
+
+          if (isIntersecting(noteRect, yAxisRect)) {
+            elm.style.backgroundColor = '#e8f6fa';  // Light blue for y-axis.
+          } else if (isIntersecting(noteRect, xAxisRect)) {
+            elm.style.backgroundColor = '#fcf9dc';  // Light yellow for x-axis.
+          } else {
+            elm.style.backgroundColor = '#fffb8f';   // Original yellow.
+          }
+
+          if (isIntersecting(noteRect, yAxisRect) || isIntersecting(noteRect, xAxisRect)) {
+            elm.pill.style.display = "none";
+          } else {
+            elm.pill.style.display = "block";
+          }
+        }
+      });
+
+      document.addEventListener('mouseup', function() {
+        isDragging = false;
+      });
+
+      elm.addEventListener('touchstart', function(e) {
+        isDragging = true;
+        const touch = e.touches[0];
+        offsetX = touch.clientX - elm.getBoundingClientRect().left;
+        offsetY = touch.clientY - elm.getBoundingClientRect().top;
+        e.preventDefault();
+      }, { passive: false });
+
+      document.addEventListener('touchmove', function(e) {
+        if (isDragging) {
+          const touch = e.touches[0];
+          const boardRect = whiteboard.getBoundingClientRect();
+          let newX = touch.clientX - boardRect.left - offsetX;
+          let newY = touch.clientY - boardRect.top - offsetY;
+          newX = Math.max(0, Math.min(newX, boardRect.width - elm.offsetWidth));
+          newY = Math.max(0, Math.min(newY, boardRect.height - elm.offsetHeight));
+          elm.style.left = newX + 'px';
+          elm.style.top = newY + 'px';
+
+          updatePill(elm, newX, newY);
+
+          const noteRect = {
+            left: newX,
+            top: newY,
+            right: newX + elm.offsetWidth,
+            bottom: newY + elm.offsetHeight
+          };
+
+          if (isIntersecting(noteRect, yAxisRect)) {
+            elm.style.backgroundColor = '#BBDEFB';
+          } else if (isIntersecting(noteRect, xAxisRect)) {
+            elm.style.backgroundColor = '#FFF9C4';
+          } else {
+            elm.style.backgroundColor = '#fffb8f';
+          }
+
+          if (isIntersecting(noteRect, yAxisRect) || isIntersecting(noteRect, xAxisRect)) {
+            elm.pill.style.display = "none";
+          } else {
+            elm.pill.style.display = "block";
+          }
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      document.addEventListener('touchend', function() {
+        isDragging = false;
+      });
+    }
+
+    // Button events.
+    addPostitBtn.addEventListener('click', function() {
+      createPostit(100, 100, "New Post-it");
+    });
+
+    saveBtn.addEventListener('click', function() {
+      html2canvas(whiteboard, { backgroundColor: null }).then(function(canvas) {
+        const link = document.createElement('a');
+        link.download = 'whiteboard.png';
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+      });
+    });
+
+    // When the Upload Background button is clicked, trigger the hidden file input.
+    uploadBackgroundBtn.addEventListener('click', function() {
+      uploadBackgroundInput.click();
+    });
+
+    // When a file is selected, load the image and apply it as the background for the full-screen whiteboard.
+    uploadBackgroundInput.addEventListener('change', function() {
+      if (this.files && this.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          whiteboard.style.backgroundImage = `url(${e.target.result})`;
+          whiteboard.style.backgroundSize = "cover";
+          whiteboard.style.backgroundPosition = "center";
+          // Optionally, remove the grid's default grid lines.
+          grid.style.backgroundImage = "none";
+        }
+        reader.readAsDataURL(this.files[0]);
+      }
+    });
+  </script>
+</body>
+</html>
