@@ -1,8 +1,4 @@
-Below is an example README.md you can use for your repository:
-
----
-
-# Whiteboard App with Post-it Dock and Delete Icon
+# Whiteboard App
 
 This is a simple, interactive whiteboard application built with plain HTML, CSS, and JavaScript. The app allows users to:
 
