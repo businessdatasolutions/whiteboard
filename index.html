@@ -2,33 +2,39 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Whiteboard App with Fixed Pill Container</title>
+  <title>Whiteboard App with Post-it Dock and Delete Icon</title>
   <!-- Materialize CSS for styling -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet">
   <!-- Material Icons -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <style>
-    /* Basic page styling */
     body {
-      padding: 20px;
+      margin: 0;
+      padding: 0;
       background: #f5f5f5;
+      font-family: sans-serif;
     }
+    /* Toolbar positioned at top left */
     #toolbar {
-      margin-bottom: 20px;
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 300;
     }
-    /* The whiteboard spans the full area (including extra space for axes) */
+    /* Whiteboard container */
     #whiteboard {
       position: relative;
-      width: 1250px;  /* 50px left padding + 1200px main grid */
-      height: 850px;  /* 800px main grid + 50px bottom padding */
-      margin: auto;
+      width: 1250px;  /* 50px left offset + 1200px grid */
+      height: 850px;  /* 800px grid + 50px bottom offset */
+      margin: 50px auto;
       border: 1px solid #ccc;
       background: #fff;
+      overflow: hidden;
     }
-    /* The grid area (for the axes and grid background) */
+    /* Grid area with default grid lines */
     #grid {
       position: absolute;
-      left: 50px;  /* left padding for y-axis labels */
+      left: 50px;  /* Reserve 50px on the left for the y-axis */
       top: 0;
       width: 1200px;
       height: 800px;
@@ -37,10 +43,51 @@
         linear-gradient(to bottom, #e0e0e0 1px, transparent 1px);
       background-size: 20px 20px;
     }
-    /* Draggable Post-it notes */
+    /* Pill container (holds pills for used Post-its) */
+    #pill-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 200;
+    }
+    /* Dock container fixed at the right side */
+    #dock {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 150px;
+      height: 100%;
+      background: #f0f0f0;
+      box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 20px;
+    }
+    /* Each dock slot holds exactly one Post-it */
+    .dock-slot {
+      width: 100%;
+      height: 110px; /* Fixed height for each slot */
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 10px;
+      border: 1px dashed #ccc;
+    }
+    /* Dock Post-its are positioned statically within their slot */
+    .dock-postit {
+      position: static;
+      width: 90%;
+      min-height: 90px;
+      cursor: move;
+    }
+    /* Used Post-its (on the canvas) are absolutely positioned */
     .post-it {
       position: absolute;
-      background: #fffb8f;
       padding: 10px;
       min-width: 100px;
       min-height: 100px;
@@ -53,18 +100,7 @@
       outline: none;
       cursor: text;
     }
-    /* Pill container: spans the whiteboard and holds all pill elements.
-       Using pointer-events: none so it won’t block clicks. */
-    #pill-container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 100;
-    }
-    /* The pill itself – note this class is used on the separate pill element */
+    /* Pill styling: shows relative position; will be created only for used Post-its */
     .pill {
       position: absolute;
       background: rgba(0, 0, 0, 0.7);
@@ -76,42 +112,54 @@
       white-space: nowrap;
       z-index: 1000;
     }
+    /* Delete icon styling */
+    .delete-icon {
+      position: absolute;
+      top: 0;
+      left: 0;
+      background: rgb(211, 210, 210);
+      color: white;
+      width: 15px;
+      height: 15px;
+      line-height: 15px;
+      text-align: center;
+      cursor: pointer;
+      z-index: 10000;
+      font-weight: bold;
+    }
     /* Axis styling */
     .axis {
       position: absolute;
       background: #000;
-      z-index: 1;
+      z-index: 50;
     }
-    /* x-axis: along the bottom of the grid */
     #x-axis {
       height: 2px;
       width: 100%;
       bottom: 0;
       left: 0;
     }
-    /* y-axis: along the left of the grid */
     #y-axis {
       width: 2px;
       height: 100%;
       top: 0;
       left: 0;
     }
+    /* Hide the old Add Post-it button */
+    #addPostitBtn {
+      display: none;
+    }
   </style>
 </head>
 <body>
   <!-- Toolbar -->
   <div id="toolbar" class="center-align">
-    <a class="waves-effect waves-light btn" id="addPostitBtn">
-      <i class="material-icons left">note_add</i>Add Post-it
-    </a>
     <a class="waves-effect waves-light btn" id="saveBtn">
       <i class="material-icons left">save</i>Save as PNG
     </a>
-    <!-- New Upload Background button -->
     <a class="waves-effect waves-light btn" id="uploadBackgroundBtn">
       <i class="material-icons left">image</i>Upload Background
     </a>
-    <!-- Hidden file input -->
     <input type="file" id="uploadBackground" accept="image/*" style="display: none;">
   </div>
 
@@ -122,116 +170,138 @@
       <div id="x-axis" class="axis"></div>
       <div id="y-axis" class="axis"></div>
     </div>
-    <!-- Separate container for all pills -->
+    <!-- Pill container -->
     <div id="pill-container"></div>
+    <!-- Dock container with fixed slots -->
+    <div id="dock">
+      <div class="dock-slot" data-color="yellow"></div>
+      <div class="dock-slot" data-color="pink"></div>
+      <div class="dock-slot" data-color="blue"></div>
+      <div class="dock-slot" data-color="green"></div>
+    </div>
   </div>
 
   <!-- Scripts -->
-  <!-- Materialize JS (optional for interactions) -->
+  <!-- Materialize JS and html2canvas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-  <!-- html2canvas for saving as PNG -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script>
     const whiteboard = document.getElementById('whiteboard');
     const grid = document.getElementById('grid');
     const pillContainer = document.getElementById('pill-container');
-    const addPostitBtn = document.getElementById('addPostitBtn');
     const saveBtn = document.getElementById('saveBtn');
     const uploadBackgroundBtn = document.getElementById('uploadBackgroundBtn');
     const uploadBackgroundInput = document.getElementById('uploadBackground');
-
-    // Grid parameters (grid is placed at left:50px, top:0 with 1200x800 dimensions)
+    const dock = document.getElementById('dock');
+    
+    // Fixed grid parameters.
     const gridLeft = 50, gridTop = 0, gridWidth = 1200, gridHeight = 800;
-    // Define the axis rectangles (absolute coordinates within the whiteboard)
     const yAxisRect = { left: gridLeft, top: gridTop, right: gridLeft + 2, bottom: gridTop + gridHeight };
     const xAxisRect = { left: gridLeft, top: gridTop + gridHeight - 2, right: gridLeft + gridWidth, bottom: gridTop + gridHeight };
-
-    // Helper function to test rectangle intersection.
+    
     function isIntersecting(rect1, rect2) {
       return !(rect1.right < rect2.left ||
                rect1.left > rect2.right ||
                rect1.bottom < rect2.top ||
                rect1.top > rect2.bottom);
     }
-
-    /**
-     * Updates the pill's text (relative position) and moves the pill to a position
-     * that follows the Post-it. In this version, the pill is placed outside the Post-it
-     * at its bottom left (with a 5px gap below). The x-percentage is computed normally,
-     * and the y-percentage is inverted so that the top of the grid is 100% and the bottom is 0%.
-     */
+    
+    // Update the pill's text and position (placed at the bottom left of the Post-it with a 5px gap).
     function updatePill(elm, newX, newY) {
-      const gridDims = { left: gridLeft, top: gridTop, width: gridWidth, height: gridHeight };
-      let relativeX = ((newX - gridDims.left) / gridDims.width) * 100;
-      let relativeY = (1 - ((newY - gridDims.top) / gridDims.height)) * 100;
+      let relativeX = ((newX - gridLeft) / gridWidth) * 100;
+      let relativeY = (1 - ((newY - gridTop) / gridHeight)) * 100;
       relativeX = Math.round(relativeX);
       relativeY = Math.round(relativeY);
-
       if (elm.pill) {
         elm.pill.innerText = `${relativeX}%, ${relativeY}%`;
-        // Position the pill at the bottom left of the Post-it (with a 5px gap below)
         elm.pill.style.left = newX + "px";
         elm.pill.style.top = (newY + elm.offsetHeight + 5) + "px";
       }
     }
-
-    /**
-     * Creates a new draggable Post-it note.
-     * For each Post-it, a separate pill is created and added to the pill container.
-     */
-    function createPostit(x = 100, y = 100, text = "New Post-it") {
+    
+    // Create a dock Post-it in the given dock slot (for a specified color). Dock Post-its have no pill or delete icon.
+    function createDockPostit(color, slot) {
       const postit = document.createElement('div');
-      postit.className = 'post-it';
-      postit.style.left = x + 'px';
-      postit.style.top = y + 'px';
-
+      postit.className = 'post-it dock-postit';
+      postit.dataset.color = color;
+      // Set background color based on color.
+      switch(color) {
+        case "yellow": postit.style.backgroundColor = "#fffb8f"; break;
+        case "pink": postit.style.backgroundColor = "#ffc0cb"; break;
+        case "blue": postit.style.backgroundColor = "#add8e6"; break;
+        case "green": postit.style.backgroundColor = "#90ee90"; break;
+      }
       const content = document.createElement('div');
       content.className = 'content';
       content.contentEditable = true;
-      content.innerText = text;
-      
-      // Prevent drag events when clicking inside the content.
+      content.innerText = "New Post-it";
       content.addEventListener('mousedown', (e) => e.stopPropagation());
       content.addEventListener('touchstart', (e) => e.stopPropagation());
-
-      // **New:** Update the pill position when content changes.
-      content.addEventListener('input', () => {
-        const currentX = parseInt(postit.style.left, 10);
-        const currentY = parseInt(postit.style.top, 10);
-        updatePill(postit, currentX, currentY);
-      });
-
       postit.appendChild(content);
-      whiteboard.appendChild(postit);
-
-      const pill = document.createElement('div');
-      pill.className = 'pill';
-      pill.innerText = "0%, 0%";
-      pillContainer.appendChild(pill);
-      postit.pill = pill;
-
-      updatePill(postit, x, y);
+      // Append to the given dock slot.
+      slot.innerHTML = ""; // Clear slot.
+      slot.appendChild(postit);
+      // Apply draggable behavior.
       makeDraggable(postit);
     }
-
-    /**
-     * Makes an element draggable. While dragging, the Post-it’s position is updated,
-     * its background color is adjusted based on axis intersections, and its associated pill
-     * is updated to reflect its new relative position.
-     * If the Post-it touches either axis, its pill is hidden.
-     */
+    
+    // When a dock Post-it is dragged, reparent it from its dock slot to the whiteboard.
+    function reparentFromDock(elm) {
+      const slot = elm.parentElement;
+      if (slot.classList.contains('dock-slot')) {
+        const rect = elm.getBoundingClientRect();
+        const wbRect = whiteboard.getBoundingClientRect();
+        const newLeft = rect.left - wbRect.left;
+        const newTop = rect.top - wbRect.top;
+        whiteboard.appendChild(elm);
+        elm.style.left = newLeft + "px";
+        elm.style.top = newTop + "px";
+        elm.classList.remove("dock-postit");
+        // Add a delete icon.
+        addDeleteIcon(elm);
+        // Create a replacement dock Post-it in the same slot.
+        const color = elm.dataset.color;
+        createDockPostit(color, slot);
+        // Now add a pill for the used Post-it.
+        const pill = document.createElement('div');
+        pill.className = 'pill';
+        pill.innerText = "0%, 0%";
+        pillContainer.appendChild(pill);
+        elm.pill = pill;
+        updatePill(elm, newLeft, newTop);
+      }
+    }
+    
+    // Add a delete icon (a small "×") to a used Post-it.
+    function addDeleteIcon(elm) {
+      const del = document.createElement('div');
+      del.className = 'delete-icon';
+      del.innerText = "×";
+      del.addEventListener('click', function(e) {
+        if (elm.pill) { elm.pill.remove(); }
+        elm.remove();
+        e.stopPropagation();
+      });
+      // Ensure the icon is always on top.
+      elm.appendChild(del);
+    }
+    
+    // Draggable behavior for a Post-it element.
     function makeDraggable(elm) {
       let offsetX, offsetY;
       let isDragging = false;
-
+      
       elm.addEventListener('mousedown', function(e) {
+        if (elm.parentElement.classList.contains('dock-slot')) {
+          reparentFromDock(elm);
+        }
         isDragging = true;
         elm.style.zIndex = Date.now();
         offsetX = e.clientX - elm.getBoundingClientRect().left;
         offsetY = e.clientY - elm.getBoundingClientRect().top;
         e.preventDefault();
       });
-
+      
       document.addEventListener('mousemove', function(e) {
         if (isDragging) {
           const boardRect = whiteboard.getBoundingClientRect();
@@ -241,44 +311,52 @@
           newY = Math.max(0, Math.min(newY, boardRect.height - elm.offsetHeight));
           elm.style.left = newX + 'px';
           elm.style.top = newY + 'px';
-
           updatePill(elm, newX, newY);
-
           const noteRect = {
             left: newX,
             top: newY,
             right: newX + elm.offsetWidth,
             bottom: newY + elm.offsetHeight
           };
-
           if (isIntersecting(noteRect, yAxisRect)) {
-            elm.style.backgroundColor = '#e8f6fa';  // Light blue for y-axis.
+            elm.style.backgroundColor = '#e8f6fa';
           } else if (isIntersecting(noteRect, xAxisRect)) {
-            elm.style.backgroundColor = '#fcf9dc';  // Light yellow for x-axis.
+            elm.style.backgroundColor = '#fcf9dc';
           } else {
-            elm.style.backgroundColor = '#fffb8f';   // Original yellow.
+            const col = elm.dataset.color;
+            if (col === "pink") { elm.style.backgroundColor = "#ffc0cb"; }
+            else if (col === "blue") { elm.style.backgroundColor = "#add8e6"; }
+            else if (col === "green") { elm.style.backgroundColor = "#90ee90"; }
+            else { elm.style.backgroundColor = "#fffb8f"; }
           }
-
+          // Hide pill and delete icon when intersecting an axis; show them otherwise.
           if (isIntersecting(noteRect, yAxisRect) || isIntersecting(noteRect, xAxisRect)) {
-            elm.pill.style.display = "none";
+            if(elm.pill) elm.pill.style.display = "none";
+            const delIcon = elm.querySelector('.delete-icon');
+            if(delIcon) delIcon.style.display = "none";
           } else {
-            elm.pill.style.display = "block";
+            if(elm.pill) elm.pill.style.display = "block";
+            const delIcon = elm.querySelector('.delete-icon');
+            if(delIcon) delIcon.style.display = "block";
           }
         }
       });
-
+      
       document.addEventListener('mouseup', function() {
         isDragging = false;
       });
-
+      
       elm.addEventListener('touchstart', function(e) {
+        if (elm.parentElement.classList.contains('dock-slot')) {
+          reparentFromDock(elm);
+        }
         isDragging = true;
         const touch = e.touches[0];
         offsetX = touch.clientX - elm.getBoundingClientRect().left;
         offsetY = touch.clientY - elm.getBoundingClientRect().top;
         e.preventDefault();
       }, { passive: false });
-
+      
       document.addEventListener('touchmove', function(e) {
         if (isDragging) {
           const touch = e.touches[0];
@@ -289,43 +367,60 @@
           newY = Math.max(0, Math.min(newY, boardRect.height - elm.offsetHeight));
           elm.style.left = newX + 'px';
           elm.style.top = newY + 'px';
-
           updatePill(elm, newX, newY);
-
           const noteRect = {
             left: newX,
             top: newY,
             right: newX + elm.offsetWidth,
             bottom: newY + elm.offsetHeight
           };
-
           if (isIntersecting(noteRect, yAxisRect)) {
             elm.style.backgroundColor = '#BBDEFB';
           } else if (isIntersecting(noteRect, xAxisRect)) {
             elm.style.backgroundColor = '#FFF9C4';
           } else {
-            elm.style.backgroundColor = '#fffb8f';
+            const col = elm.dataset.color;
+            if (col === "pink") { elm.style.backgroundColor = "#ffc0cb"; }
+            else if (col === "blue") { elm.style.backgroundColor = "#add8e6"; }
+            else if (col === "green") { elm.style.backgroundColor = "#90ee90"; }
+            else { elm.style.backgroundColor = "#fffb8f"; }
           }
-
           if (isIntersecting(noteRect, yAxisRect) || isIntersecting(noteRect, xAxisRect)) {
-            elm.pill.style.display = "none";
+            if(elm.pill) elm.pill.style.display = "none";
+            const delIcon = elm.querySelector('.delete-icon');
+            if(delIcon) delIcon.style.display = "none";
           } else {
-            elm.pill.style.display = "block";
+            if(elm.pill) elm.pill.style.display = "block";
+            const delIcon = elm.querySelector('.delete-icon');
+            if(delIcon) delIcon.style.display = "block";
           }
           e.preventDefault();
         }
       }, { passive: false });
-
+      
       document.addEventListener('touchend', function() {
         isDragging = false;
       });
     }
-
-    // Button events.
-    addPostitBtn.addEventListener('click', function() {
-      createPostit(100, 100, "New Post-it");
+    
+    // Background image upload.
+    uploadBackgroundBtn.addEventListener('click', function() {
+      uploadBackgroundInput.click();
     });
-
+    uploadBackgroundInput.addEventListener('change', function() {
+      if (this.files && this.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          whiteboard.style.backgroundImage = `url(${e.target.result})`;
+          whiteboard.style.backgroundSize = "cover";
+          whiteboard.style.backgroundPosition = "center";
+          grid.style.backgroundImage = "none";
+        }
+        reader.readAsDataURL(this.files[0]);
+      }
+    });
+    
+    // PNG saving.
     saveBtn.addEventListener('click', function() {
       html2canvas(whiteboard, { backgroundColor: null }).then(function(canvas) {
         const link = document.createElement('a');
@@ -334,26 +429,16 @@
         link.click();
       });
     });
-
-    // When the Upload Background button is clicked, trigger the hidden file input.
-    uploadBackgroundBtn.addEventListener('click', function() {
-      uploadBackgroundInput.click();
-    });
-
-    // When a file is selected, load the image and apply it as the background for the full-screen whiteboard.
-    uploadBackgroundInput.addEventListener('change', function() {
-      if (this.files && this.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          whiteboard.style.backgroundImage = `url(${e.target.result})`;
-          whiteboard.style.backgroundSize = "cover";
-          whiteboard.style.backgroundPosition = "center";
-          // Optionally, remove the grid's default grid lines.
-          grid.style.backgroundImage = "none";
-        }
-        reader.readAsDataURL(this.files[0]);
-      }
-    });
+    
+    // Initialize the dock: create one dock Post-it per slot.
+    function initializeDock() {
+      const colors = ["yellow", "pink", "blue", "green"];
+      const slots = document.querySelectorAll('.dock-slot');
+      slots.forEach((slot, index) => {
+        createDockPostit(colors[index], slot);
+      });
+    }
+    initializeDock();
   </script>
 </body>
 </html>
