@@ -3,10 +3,10 @@
 This is a simple, interactive whiteboard application built with plain HTML, CSS, and JavaScript. The app allows users to:
 
 - **Drag and drop** Post-it notes onto the whiteboard canvas.
-- Use a **dock** on the right side of the canvas that contains four ready-made Post-its (yellow, pink, blue, and green). When a Post-it is dragged from the dock into the canvas, a replacement of the same color is automatically created in the dock, preserving the dock order.
-- **Edit** the content of each Post-it.
-- See a small **position pill** (displaying the relative position in percentages) that is automatically positioned at the bottom left of each used Post-it.
-- Remove a Post-it by clicking a small **delete icon** in the top left corner (the delete icon is hidden when the Post-it touches an axis).
+- The **dock** on the right side of the canvas contains four ready-made Post-its (yellow, pink, blue, and green). When a Post-it is dragged from the dock into the canvas, a replacement is automatically created in the dock.
+- The Post-it changes color when drag over the x or y axis.
+- A small **position pill** (displaying the relative position in percentages) is automatically positioned at the bottom left of each used Post-it.
+- Remove a Post-it by on the **delete icon** in the top left corner.
 - **Upload a background image** to replace the default grid.
 - **Save the whiteboard** as a PNG image.
 
@@ -33,7 +33,10 @@ Try it out [here](https://businessdatasolutions.github.io/whiteboard/)
      Click inside a Post-it to edit its content. The position pill (showing the relative position on the grid) updates automatically.
 
    - **Delete Post-its:**  
-     A small "×" icon appears in the top left of each used Post-it (unless the Post-it is too close to the x- or y-axis). Click the icon to delete the Post-it.
+     A small "×" icon appears in the top left of each used Post-it (unless the Post-it is over the x- or y-axis). Click the icon to delete the Post-it.
+
+   - **Add content to axes:**  
+     When a Post-it is dragged over one of the axes it changes color and the position pill and the delete icon disappear. Use this to add titles and scales to the axes.
 
    - **Upload Background:**  
      Click the "Upload Background" button in the toolbar to select an image file. The image will be applied as the whiteboard background, replacing the default grid.
