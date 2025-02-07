@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Whiteboard App with Post-it Dock and Delete Icon</title>
+  <title>Whiteboard with Post-it Dock & Stickers</title>
   <!-- Materialize CSS for styling -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet">
   <!-- Material Icons -->
@@ -34,6 +34,7 @@
     /* Grid area with default grid lines */
     #grid {
       position: absolute;
+      z-index: 1;
       left: 50px;  /* Reserve 50px on the left for the y-axis */
       top: 0;
       width: 1200px;
@@ -68,15 +69,16 @@
       align-items: center;
       padding-top: 20px;
     }
-    /* Each dock slot holds exactly one Post-it */
+    /* Each dock slot holds exactly one item */
     .dock-slot {
       width: 100%;
-      height: 110px; /* Fixed height for each slot */
+      height: 110px; /* For Post-its or stickers */
       display: flex;
       justify-content: center;
       align-items: center;
       margin-bottom: 10px;
       border: 1px dashed #ccc;
+      position: relative;
     }
     /* Dock Post-its are positioned statically within their slot */
     .dock-postit {
@@ -100,7 +102,7 @@
       outline: none;
       cursor: text;
     }
-    /* Pill styling: shows relative position; will be created only for used Post-its */
+    /* Pill styling (displays relative X/Y for Post-its) */
     .pill {
       position: absolute;
       background: rgba(0, 0, 0, 0.7);
@@ -131,7 +133,7 @@
     .axis {
       position: absolute;
       background: #000;
-      z-index: 50;
+      z-index: 1; /* Axes behind Post-its (which start at z=2). */
     }
     #x-axis {
       height: 2px;
@@ -148,6 +150,42 @@
     /* Hide the old Add Post-it button */
     #addPostitBtn {
       display: none;
+    }
+    /* ---------------------------
+       STICKER-SPECIFIC STYLING
+       --------------------------- */
+    /* Sticker while in the dock */
+    .dock-sticker {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background-color: #ff2400; /* scarlet red */
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-weight: bold;
+      font-size: 16px;
+      position: static;
+      cursor: move;
+    }
+    /* Sticker once placed on the board */
+    .sticker {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background-color: #ff2400;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-weight: bold;
+      font-size: 16px;
+      cursor: move;
+      user-select: none;
+      /* Large z-index so it’s always above Post-its */
+      z-index: 999999;
     }
   </style>
 </head>
@@ -174,10 +212,14 @@
     <div id="pill-container"></div>
     <!-- Dock container with fixed slots -->
     <div id="dock">
+      <!-- Four post-it slots -->
       <div class="dock-slot" data-color="yellow"></div>
       <div class="dock-slot" data-color="pink"></div>
       <div class="dock-slot" data-color="blue"></div>
       <div class="dock-slot" data-color="green"></div>
+      
+      <!-- Sticker slot: one small slot for the sticker -->
+      <div class="dock-slot" id="sticker-slot"></div>
     </div>
   </div>
 
@@ -186,6 +228,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script>
+    /**********************
+     * GLOBAL DEFINITIONS *
+     **********************/
     const whiteboard = document.getElementById('whiteboard');
     const grid = document.getElementById('grid');
     const pillContainer = document.getElementById('pill-container');
@@ -193,59 +238,130 @@
     const uploadBackgroundBtn = document.getElementById('uploadBackgroundBtn');
     const uploadBackgroundInput = document.getElementById('uploadBackground');
     const dock = document.getElementById('dock');
-    
-    // Fixed grid parameters.
+    const stickerSlot = document.getElementById('sticker-slot');
+
+    // Grid parameters and axis rectangles
     const gridLeft = 50, gridTop = 0, gridWidth = 1200, gridHeight = 800;
     const yAxisRect = { left: gridLeft, top: gridTop, right: gridLeft + 2, bottom: gridTop + gridHeight };
     const xAxisRect = { left: gridLeft, top: gridTop + gridHeight - 2, right: gridLeft + gridWidth, bottom: gridTop + gridHeight };
-    
+
+    // Global z-index counters
+    let postItZ = 2;      // Post-its go upward from 2
+    let stickerZ = 100001; // Stickers start at a high z-index
+    let stickerCount = 1;  // Sticker numbering
+
+    // The current drag state (used by the drag manager)
+    let currentDrag = null;
+
+    /********************
+     * HELPER FUNCTIONS *
+     ********************/
+    // Clamp a value between min and max.
+    const clamp = (val, min, max) => Math.max(min, Math.min(val, max));
+
+    // Return clientX/clientY from mouse or touch event.
+    function getClientCoords(e) {
+      if (e.touches && e.touches.length > 0) {
+        return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+      }
+      return { clientX: e.clientX, clientY: e.clientY };
+    }
+
+    // Check if two rectangles intersect.
     function isIntersecting(rect1, rect2) {
       return !(rect1.right < rect2.left ||
                rect1.left > rect2.right ||
                rect1.bottom < rect2.top ||
                rect1.top > rect2.bottom);
     }
-    
-    // Update the pill's text and position (placed at the bottom left of the Post-it with a 5px gap).
+
+    // Get the base color for a post-it based on its data attribute.
+    function getBasePostItColor(elm) {
+      switch(elm.dataset.color) {
+        case "pink":  return "#ffc0cb";
+        case "blue":  return "#add8e6";
+        case "green": return "#90ee90";
+        default:      return "#fffb8f"; // yellow by default
+      }
+    }
+
+    // Update the pill element (which shows the relative position)
     function updatePill(elm, newX, newY) {
-      let relativeX = ((newX - gridLeft) / gridWidth) * 100;
-      let relativeY = (1 - ((newY - gridTop) / gridHeight)) * 100;
-      relativeX = Math.round(relativeX);
-      relativeY = Math.round(relativeY);
+      let relativeX = Math.round(((newX - gridLeft) / gridWidth) * 100);
+      let relativeY = Math.round((1 - ((newY - gridTop) / gridHeight)) * 100);
       if (elm.pill) {
         elm.pill.innerText = `${relativeX}%, ${relativeY}%`;
         elm.pill.style.left = newX + "px";
         elm.pill.style.top = (newY + elm.offsetHeight + 5) + "px";
       }
     }
-    
-    // Create a dock Post-it in the given dock slot (for a specified color). Dock Post-its have no pill or delete icon.
+
+    // Add a delete icon to a post-it element.
+    function addDeleteIcon(elm) {
+      const del = document.createElement('div');
+      del.className = 'delete-icon';
+      del.innerText = "×";
+      del.addEventListener('click', function(e) {
+        if (elm.pill) elm.pill.remove();
+        elm.remove();
+        e.stopPropagation();
+      });
+      elm.appendChild(del);
+    }
+
+    /*********************
+     * DRAG MANAGER      *
+     *********************/
+    // Global mouse and touch move/end handlers use the currentDrag object.
+    document.addEventListener('mousemove', (e) => {
+      if (currentDrag && currentDrag.onDragMove) {
+        currentDrag.onDragMove(e);
+        e.preventDefault();
+      }
+    });
+    document.addEventListener('mouseup', () => {
+      if (currentDrag && currentDrag.onDragEnd) currentDrag.onDragEnd();
+      currentDrag = null;
+    });
+    document.addEventListener('touchmove', (e) => {
+      if (currentDrag && currentDrag.onDragMove) {
+        currentDrag.onDragMove(e);
+        e.preventDefault();
+      }
+    }, { passive: false });
+    document.addEventListener('touchend', () => {
+      if (currentDrag && currentDrag.onDragEnd) currentDrag.onDragEnd();
+      currentDrag = null;
+    });
+
+    /*************************************
+     * POST-IT CREATION AND DRAGGING     *
+     *************************************/
+    // Create a new dock post-it for a given color in a given slot.
     function createDockPostit(color, slot) {
       const postit = document.createElement('div');
       postit.className = 'post-it dock-postit';
       postit.dataset.color = color;
       // Set background color based on color.
-      switch(color) {
-        case "yellow": postit.style.backgroundColor = "#fffb8f"; break;
-        case "pink": postit.style.backgroundColor = "#ffc0cb"; break;
-        case "blue": postit.style.backgroundColor = "#add8e6"; break;
-        case "green": postit.style.backgroundColor = "#90ee90"; break;
-      }
+      postit.style.backgroundColor = getBasePostItColor(postit);
+
       const content = document.createElement('div');
       content.className = 'content';
       content.contentEditable = true;
       content.innerText = "New Post-it";
+      // Prevent the content area from interfering with dragging.
       content.addEventListener('mousedown', (e) => e.stopPropagation());
       content.addEventListener('touchstart', (e) => e.stopPropagation());
+
       postit.appendChild(content);
-      // Append to the given dock slot.
-      slot.innerHTML = ""; // Clear slot.
+      // Clear the slot and append the new post-it.
+      slot.innerHTML = "";
       slot.appendChild(postit);
-      // Apply draggable behavior.
-      makeDraggable(postit);
+      // Make the post-it draggable.
+      makeDraggablePostit(postit);
     }
-    
-    // When a dock Post-it is dragged, reparent it from its dock slot to the whiteboard.
+
+    // When a post-it is dragged from a dock slot, reparent it to the whiteboard.
     function reparentFromDock(elm) {
       const slot = elm.parentElement;
       if (slot.classList.contains('dock-slot')) {
@@ -256,13 +372,14 @@
         whiteboard.appendChild(elm);
         elm.style.left = newLeft + "px";
         elm.style.top = newTop + "px";
+        elm.style.zIndex = postItZ++;
         elm.classList.remove("dock-postit");
-        // Add a delete icon.
         addDeleteIcon(elm);
-        // Create a replacement dock Post-it in the same slot.
-        const color = elm.dataset.color;
-        createDockPostit(color, slot);
-        // Now add a pill for the used Post-it.
+
+        // Replace the dock post-it.
+        createDockPostit(elm.dataset.color, slot);
+
+        // Create and attach a pill for the used post-it.
         const pill = document.createElement('div');
         pill.className = 'pill';
         pill.innerText = "0%, 0%";
@@ -271,140 +388,173 @@
         updatePill(elm, newLeft, newTop);
       }
     }
-    
-    // Add a delete icon (a small "×") to a used Post-it.
-    function addDeleteIcon(elm) {
-      const del = document.createElement('div');
-      del.className = 'delete-icon';
-      del.innerText = "×";
-      del.addEventListener('click', function(e) {
-        if (elm.pill) { elm.pill.remove(); }
-        elm.remove();
-        e.stopPropagation();
-      });
-      // Ensure the icon is always on top.
-      elm.appendChild(del);
+
+    // Handle dragging for post-its.
+    function handlePostItDrag(e, elm, startOffsetX, startOffsetY) {
+      const { clientX, clientY } = getClientCoords(e);
+      const boardRect = whiteboard.getBoundingClientRect();
+      let newX = clamp(clientX - boardRect.left - startOffsetX, 0, boardRect.width - elm.offsetWidth);
+      let newY = clamp(clientY - boardRect.top - startOffsetY, 0, boardRect.height - elm.offsetHeight);
+      elm.style.left = newX + 'px';
+      elm.style.top = newY + 'px';
+      updatePill(elm, newX, newY);
+
+      // Determine the rectangle of the post-it.
+      const noteRect = {
+        left: newX,
+        top: newY,
+        right: newX + elm.offsetWidth,
+        bottom: newY + elm.offsetHeight
+      };
+
+      // Change background color when intersecting axes.
+      if (isIntersecting(noteRect, yAxisRect)) {
+        elm.style.backgroundColor = '#e8f6fa';
+      } else if (isIntersecting(noteRect, xAxisRect)) {
+        elm.style.backgroundColor = '#fcf9dc';
+      } else {
+        elm.style.backgroundColor = getBasePostItColor(elm);
+      }
+
+      // Toggle pill and delete icon visibility based on axis intersection.
+      const hide = isIntersecting(noteRect, yAxisRect) || isIntersecting(noteRect, xAxisRect);
+      if (elm.pill) elm.pill.style.display = hide ? "none" : "block";
+      const delIcon = elm.querySelector('.delete-icon');
+      if (delIcon) delIcon.style.display = hide ? "none" : "block";
     }
-    
-    // Draggable behavior for a Post-it element.
-    function makeDraggable(elm) {
-      let offsetX, offsetY;
-      let isDragging = false;
-      
-      elm.addEventListener('mousedown', function(e) {
+
+    // Make a post-it element draggable.
+    function makeDraggablePostit(elm) {
+      elm.addEventListener('mousedown', (e) => {
+        // If in a dock, reparent it.
         if (elm.parentElement.classList.contains('dock-slot')) {
           reparentFromDock(elm);
         }
-        isDragging = true;
-        elm.style.zIndex = Date.now();
-        offsetX = e.clientX - elm.getBoundingClientRect().left;
-        offsetY = e.clientY - elm.getBoundingClientRect().top;
+        // Bring the element to the front.
+        elm.style.zIndex = postItZ++;
+        const { clientX, clientY } = getClientCoords(e);
+        const rect = elm.getBoundingClientRect();
+        const offsetX = clientX - rect.left;
+        const offsetY = clientY - rect.top;
+        currentDrag = {
+          element: elm,
+          startOffsetX: offsetX,
+          startOffsetY: offsetY,
+          onDragMove: (ev) => handlePostItDrag(ev, elm, offsetX, offsetY),
+          onDragEnd: () => {} // (No special cleanup needed.)
+        };
         e.preventDefault();
       });
-      
-      document.addEventListener('mousemove', function(e) {
-        if (isDragging) {
-          const boardRect = whiteboard.getBoundingClientRect();
-          let newX = e.clientX - boardRect.left - offsetX;
-          let newY = e.clientY - boardRect.top - offsetY;
-          newX = Math.max(0, Math.min(newX, boardRect.width - elm.offsetWidth));
-          newY = Math.max(0, Math.min(newY, boardRect.height - elm.offsetHeight));
-          elm.style.left = newX + 'px';
-          elm.style.top = newY + 'px';
-          updatePill(elm, newX, newY);
-          const noteRect = {
-            left: newX,
-            top: newY,
-            right: newX + elm.offsetWidth,
-            bottom: newY + elm.offsetHeight
-          };
-          if (isIntersecting(noteRect, yAxisRect)) {
-            elm.style.backgroundColor = '#e8f6fa';
-          } else if (isIntersecting(noteRect, xAxisRect)) {
-            elm.style.backgroundColor = '#fcf9dc';
-          } else {
-            const col = elm.dataset.color;
-            if (col === "pink") { elm.style.backgroundColor = "#ffc0cb"; }
-            else if (col === "blue") { elm.style.backgroundColor = "#add8e6"; }
-            else if (col === "green") { elm.style.backgroundColor = "#90ee90"; }
-            else { elm.style.backgroundColor = "#fffb8f"; }
-          }
-          // Hide pill and delete icon when intersecting an axis; show them otherwise.
-          if (isIntersecting(noteRect, yAxisRect) || isIntersecting(noteRect, xAxisRect)) {
-            if(elm.pill) elm.pill.style.display = "none";
-            const delIcon = elm.querySelector('.delete-icon');
-            if(delIcon) delIcon.style.display = "none";
-          } else {
-            if(elm.pill) elm.pill.style.display = "block";
-            const delIcon = elm.querySelector('.delete-icon');
-            if(delIcon) delIcon.style.display = "block";
-          }
-        }
-      });
-      
-      document.addEventListener('mouseup', function() {
-        isDragging = false;
-      });
-      
-      elm.addEventListener('touchstart', function(e) {
+
+      elm.addEventListener('touchstart', (e) => {
         if (elm.parentElement.classList.contains('dock-slot')) {
           reparentFromDock(elm);
         }
-        isDragging = true;
-        const touch = e.touches[0];
-        offsetX = touch.clientX - elm.getBoundingClientRect().left;
-        offsetY = touch.clientY - elm.getBoundingClientRect().top;
+        elm.style.zIndex = postItZ++;
+        const { clientX, clientY } = getClientCoords(e);
+        const rect = elm.getBoundingClientRect();
+        const offsetX = clientX - rect.left;
+        const offsetY = clientY - rect.top;
+        currentDrag = {
+          element: elm,
+          startOffsetX: offsetX,
+          startOffsetY: offsetY,
+          onDragMove: (ev) => handlePostItDrag(ev, elm, offsetX, offsetY),
+          onDragEnd: () => {}
+        };
         e.preventDefault();
       }, { passive: false });
-      
-      document.addEventListener('touchmove', function(e) {
-        if (isDragging) {
-          const touch = e.touches[0];
-          const boardRect = whiteboard.getBoundingClientRect();
-          let newX = touch.clientX - boardRect.left - offsetX;
-          let newY = touch.clientY - boardRect.top - offsetY;
-          newX = Math.max(0, Math.min(newX, boardRect.width - elm.offsetWidth));
-          newY = Math.max(0, Math.min(newY, boardRect.height - elm.offsetHeight));
-          elm.style.left = newX + 'px';
-          elm.style.top = newY + 'px';
-          updatePill(elm, newX, newY);
-          const noteRect = {
-            left: newX,
-            top: newY,
-            right: newX + elm.offsetWidth,
-            bottom: newY + elm.offsetHeight
-          };
-          if (isIntersecting(noteRect, yAxisRect)) {
-            elm.style.backgroundColor = '#BBDEFB';
-          } else if (isIntersecting(noteRect, xAxisRect)) {
-            elm.style.backgroundColor = '#FFF9C4';
-          } else {
-            const col = elm.dataset.color;
-            if (col === "pink") { elm.style.backgroundColor = "#ffc0cb"; }
-            else if (col === "blue") { elm.style.backgroundColor = "#add8e6"; }
-            else if (col === "green") { elm.style.backgroundColor = "#90ee90"; }
-            else { elm.style.backgroundColor = "#fffb8f"; }
-          }
-          if (isIntersecting(noteRect, yAxisRect) || isIntersecting(noteRect, xAxisRect)) {
-            if(elm.pill) elm.pill.style.display = "none";
-            const delIcon = elm.querySelector('.delete-icon');
-            if(delIcon) delIcon.style.display = "none";
-          } else {
-            if(elm.pill) elm.pill.style.display = "block";
-            const delIcon = elm.querySelector('.delete-icon');
-            if(delIcon) delIcon.style.display = "block";
-          }
-          e.preventDefault();
-        }
-      }, { passive: false });
-      
-      document.addEventListener('touchend', function() {
-        isDragging = false;
-      });
     }
-    
-    // Background image upload.
-    uploadBackgroundBtn.addEventListener('click', function() {
+
+    /*************************************
+     * STICKER CREATION AND DRAGGING     *
+     *************************************/
+    // Create a new dock sticker with the given number.
+    function createDockSticker(number, slot) {
+      const sticker = document.createElement('div');
+      sticker.className = 'dock-sticker';
+      sticker.textContent = number;
+      sticker.dataset.number = number;
+      slot.innerHTML = "";
+      slot.appendChild(sticker);
+      makeDraggableSticker(sticker);
+    }
+
+    // Reparent a sticker from the dock to the whiteboard.
+    function reparentStickerFromDock(elm) {
+      const slot = elm.parentElement;
+      if (slot.classList.contains('dock-slot')) {
+        const rect = elm.getBoundingClientRect();
+        const wbRect = whiteboard.getBoundingClientRect();
+        const newLeft = rect.left - wbRect.left;
+        const newTop = rect.top - wbRect.top;
+        whiteboard.appendChild(elm);
+        elm.style.left = newLeft + "px";
+        elm.style.top = newTop + "px";
+        elm.classList.remove("dock-sticker");
+        elm.classList.add("sticker");
+        elm.style.zIndex = stickerZ++;
+        // Immediately replace the dock sticker.
+        stickerCount++;
+        createDockSticker(stickerCount, slot);
+      }
+    }
+
+    // Handle sticker dragging.
+    function handleStickerDrag(e, elm, startOffsetX, startOffsetY) {
+      const { clientX, clientY } = getClientCoords(e);
+      const boardRect = whiteboard.getBoundingClientRect();
+      let newX = clamp(clientX - boardRect.left - startOffsetX, 0, boardRect.width - elm.offsetWidth);
+      let newY = clamp(clientY - boardRect.top - startOffsetY, 0, boardRect.height - elm.offsetHeight);
+      elm.style.left = newX + 'px';
+      elm.style.top = newY + 'px';
+    }
+
+    // Make a sticker element draggable.
+    function makeDraggableSticker(elm) {
+      elm.addEventListener('mousedown', (e) => {
+        if (elm.classList.contains('dock-sticker')) {
+          reparentStickerFromDock(elm);
+        }
+        elm.style.zIndex = stickerZ++;
+        const { clientX, clientY } = getClientCoords(e);
+        const rect = elm.getBoundingClientRect();
+        const offsetX = clientX - rect.left;
+        const offsetY = clientY - rect.top;
+        currentDrag = {
+          element: elm,
+          startOffsetX: offsetX,
+          startOffsetY: offsetY,
+          onDragMove: (ev) => handleStickerDrag(ev, elm, offsetX, offsetY),
+          onDragEnd: () => {}
+        };
+        e.preventDefault();
+      });
+
+      elm.addEventListener('touchstart', (e) => {
+        if (elm.classList.contains('dock-sticker')) {
+          reparentStickerFromDock(elm);
+        }
+        elm.style.zIndex = stickerZ++;
+        const { clientX, clientY } = getClientCoords(e);
+        const rect = elm.getBoundingClientRect();
+        const offsetX = clientX - rect.left;
+        const offsetY = clientY - rect.top;
+        currentDrag = {
+          element: elm,
+          startOffsetX: offsetX,
+          startOffsetY: offsetY,
+          onDragMove: (ev) => handleStickerDrag(ev, elm, offsetX, offsetY),
+          onDragEnd: () => {}
+        };
+        e.preventDefault();
+      }, { passive: false });
+    }
+
+    /*************************************
+     * BACKGROUND UPLOAD & PNG SAVING    *
+     *************************************/
+    uploadBackgroundBtn.addEventListener('click', () => {
       uploadBackgroundInput.click();
     });
     uploadBackgroundInput.addEventListener('change', function() {
@@ -414,31 +564,40 @@
           whiteboard.style.backgroundImage = `url(${e.target.result})`;
           whiteboard.style.backgroundSize = "cover";
           whiteboard.style.backgroundPosition = "center";
+          // Optionally remove grid lines:
           grid.style.backgroundImage = "none";
         }
         reader.readAsDataURL(this.files[0]);
       }
     });
-    
-    // PNG saving.
-    saveBtn.addEventListener('click', function() {
-      html2canvas(whiteboard, { backgroundColor: null }).then(function(canvas) {
+
+    saveBtn.addEventListener('click', () => {
+      html2canvas(whiteboard, { backgroundColor: null }).then((canvas) => {
         const link = document.createElement('a');
         link.download = 'whiteboard.png';
         link.href = canvas.toDataURL("image/png");
         link.click();
       });
     });
-    
-    // Initialize the dock: create one dock Post-it per slot.
+
+    /*************************************
+     * INITIALIZATION                    *
+     *************************************/
     function initializeDock() {
       const colors = ["yellow", "pink", "blue", "green"];
-      const slots = document.querySelectorAll('.dock-slot');
+      const slots = document.querySelectorAll('.dock-slot[data-color]');
       slots.forEach((slot, index) => {
         createDockPostit(colors[index], slot);
       });
     }
+
+    function initializeStickerSlot() {
+      createDockSticker(stickerCount, stickerSlot);
+    }
+
+    // Run initialization on load.
     initializeDock();
+    initializeStickerSlot();
   </script>
 </body>
 </html>

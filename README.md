@@ -1,14 +1,44 @@
 # Whiteboard App
 
-This is a simple, interactive whiteboard application built with plain HTML, CSS, and JavaScript. The app allows users to:
+The **Whiteboard App** is an interactive, client‑side canvas built with HTML, CSS, and JavaScript. It allows you to create, move, and customize visual elements in real time—all with an intuitive drag‑and‑drop interface.
 
-- **Drag and drop** Post-it notes onto the whiteboard canvas.
-- The **dock** on the right side of the canvas contains four ready-made Post-its (yellow, pink, blue, and green). When a Post-it is dragged from the dock into the canvas, a replacement is automatically created in the dock.
-- The Post-it changes color when drag over the x or y axis.
-- A small **position pill** (displaying the relative position in percentages) is automatically positioned at the bottom left of each used Post-it.
-- Remove a Post-it by on the **delete icon** in the top left corner.
-- **Upload a background image** to replace the default grid.
-- **Save the whiteboard** as a PNG image.
+## Features
+
+### Post-it Notes
+- **Drag and Drop:**  
+  Easily drag colorful Post-it notes from the dock onto the whiteboard canvas.
+- **Dock Replacement:**  
+  The right‑hand dock features four ready‑made Post-it notes (yellow, pink, blue, and green). When you drag one out, a new Post-it of the same color is automatically generated in its place.
+- **Dynamic Positioning:**  
+  Each used Post-it displays a **position pill** that updates in real time to show its relative position (in percentages) on the grid.
+- **Interactive Axes:**  
+  When a Post-it is dragged over the x‑ or y‑axis, its background color changes. This behavior can be used to annotate or mark the axes.
+- **Easy Deletion:**  
+  A small **delete icon** (“×”) appears in the top left of each Post-it (except when over an axis) so you can remove notes with a click.
+
+### Stickers (New!)
+- **New Sticker Functionality:**  
+  In addition to Post-it notes, the dock now includes a **sticker** slot.
+- **Numbered Stickers:**  
+  The sticker appears with a unique number. Dragging it from the dock onto the canvas reassigns it as a fully draggable element.
+- **Auto-replacement:**  
+  Once a sticker is moved to the board, a new sticker with an incremented number is automatically generated in the dock.
+- **Always on Top:**  
+  Stickers have a high z‑index, ensuring they remain visible above all Post-it notes and other elements.
+
+### Background Customization
+- **Upload Background:**  
+  Replace the default grid by clicking the **Upload Background** button. Select an image file to personalize your whiteboard.
+
+### Save as PNG
+- **Capture Your Work:**  
+  Click the **Save as PNG** button to capture the entire whiteboard—including Post-its, stickers, and your custom background—as a high‑quality PNG image.
+
+### Enhanced Interactivity & Performance
+- **Touch & Mouse Support:**  
+  Enjoy smooth drag‑and‑drop interactions on both desktop and mobile devices.
+- **Refactored Drag Manager:**  
+  The code now uses a centralized drag manager that optimizes event handling and improves overall performance, making the app more responsive and easier to maintain.
 
 ## Demo
 
@@ -18,38 +48,35 @@ Try it out [here](https://businessdatasolutions.github.io/whiteboard/)
 
 ## How to Use
 
-1. **Clone the repository:**
+1. **Clone the Repository:**
 
-2. **Open the app:**
+2. **Open the App:**
 
-   Open the `index.html` file in your favorite web browser (Chrome, Firefox, etc.). No server is required as the app is entirely client-side.
+   Simply open the `index.html` file in your preferred web browser (Chrome, Firefox, etc.). The app runs entirely on the client side—no server setup is required.
 
 3. **Using the App:**
 
-   - **Dock & Drag Post-its:**  
-     On the right-hand side, you will see the dock with four Post-its in different colors. Click and drag a Post-it from the dock onto the canvas. When you drag one out, a new Post-it of that color will immediately replace it in the dock.
+   - **Post-it Notes:**  
+     Drag a Post-it from the right‑hand dock onto the canvas. Click inside the Post-it to edit its content, and watch the position pill update automatically. To delete a Post-it, click the "×" icon.
 
-   - **Edit Post-its:**  
-     Click inside a Post-it to edit its content. The position pill (showing the relative position on the grid) updates automatically.
+   - **Stickers:**  
+     Drag the numbered sticker from the dock onto the canvas. Once placed, the sticker can be moved freely and always stays on top of other elements. A new sticker will instantly replace the one you dragged.
 
-   - **Delete Post-its:**  
-     A small "×" icon appears in the top left of each used Post-it (unless the Post-it is over the x- or y-axis). Click the icon to delete the Post-it.
-
-   - **Add content to axes:**  
-     When a Post-it is dragged over one of the axes it changes color and the position pill and the delete icon disappear. Use this to add titles and scales to the axes.
+   - **Axes & Grid:**  
+     When a Post-it is moved over an axis, it changes color and the position pill (along with the delete icon) temporarily hides. This feature is useful for labeling axes.
 
    - **Upload Background:**  
-     Click the "Upload Background" button in the toolbar to select an image file. The image will be applied as the whiteboard background, replacing the default grid.
+     Click the **Upload Background** button, select an image file, and the whiteboard’s background will change from the grid to your chosen image.
 
    - **Save as PNG:**  
-     When you are ready to save your work, click the "Save as PNG" button. The whiteboard (with all the Post-its and background) will be captured as a PNG image.
+     When you’re ready to save your work, click the **Save as PNG** button. The whiteboard will be captured as a PNG image that you can download and share.
 
 ## Technologies Used
 
 - **HTML5** for structure
-- **CSS3** for styling (with Materialize CSS for basic styling)
+- **CSS3** for styling (with Materialize CSS for a modern design)
 - **Vanilla JavaScript** for interactivity
-- **html2canvas** for capturing the whiteboard as a PNG
+- **html2canvas** for capturing the whiteboard as a PNG image
 
 ## License
 
@@ -57,7 +84,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Contributing
 
-Contributions are welcome! If you have ideas or improvements, please open an issue or submit a pull request.
+Contributions are welcome! If you have ideas, improvements, or new features, please open an issue or submit a pull request.
 
 ## Acknowledgments
 
