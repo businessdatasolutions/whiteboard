@@ -48,7 +48,7 @@ Try it out [here](https://businessdatasolutions.github.io/whiteboard/)
 
 ## How to Use
 
-1. **Clone the Repository:**
+1. **Clone the Repository.**
 
 2. **Open the App:**
 
