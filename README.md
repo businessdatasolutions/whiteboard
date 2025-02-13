@@ -16,13 +16,13 @@ The **Whiteboard App** is an interactive, client‑side canvas built with HTML, 
 - **Easy Deletion:**  
   A small **delete icon** (“×”) appears in the top left of each Post-it (except when over an axis) so you can remove notes with a click.
 
-### Stickers (New!)
-- **New Sticker Functionality:**  
+### Stickers
+- **Sticker Functionality:**  
   In addition to Post-it notes, the dock now includes a **sticker** slot.
 - **Numbered Stickers:**  
-  The sticker appears with a unique number. Dragging it from the dock onto the canvas reassigns it as a fully draggable element.
+  The numbered sticker appears with a unique number. Dragging it from the dock onto the canvas reassigns it as a fully draggable element.
 - **Auto-replacement:**  
-  Once a sticker is moved to the board, a new sticker with an incremented number is automatically generated in the dock.
+  Once a numbered sticker is moved to the board, a new sticker with an incremented number is automatically generated in the dock.
 - **Always on Top:**  
   Stickers have a high z‑index, ensuring they remain visible above all Post-it notes and other elements.
 
