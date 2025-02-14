@@ -133,7 +133,7 @@
     .axis {
       position: absolute;
       background: #000;
-      z-index: 1; /* Axes behind Post-its (which start at z=2). */
+      z-index: 1;
     }
     #x-axis {
       height: 2px;
@@ -307,7 +307,7 @@
       }
     }
 
-    // updatePill remains as before (used for on-screen display)
+    // updatePill is used only for on-screen display (the PDF table uses its own calculation)
     function updatePill(elm, newX, newY) {
       let relativeX = Math.round(((newX - gridLeft) / gridWidth) * 100);
       let relativeY = Math.round((1 - ((newY - gridTop) / gridHeight)) * 100);
@@ -405,6 +405,27 @@
       elm.style.left = newX + 'px';
       elm.style.top = newY + 'px';
       updatePill(elm, newX, newY);
+      
+      // Recalculate axis positions based on the grid's current bounding rectangle:
+      const gridRect = grid.getBoundingClientRect();
+      const dynamicYAxisRect = { left: gridRect.left, top: gridRect.top, right: gridRect.left + 2, bottom: gridRect.bottom };
+      const dynamicXAxisRect = { left: gridRect.left, top: gridRect.bottom - 2, right: gridRect.right, bottom: gridRect.bottom };
+      
+      // Use note's current viewport coordinates
+      const noteRect = elm.getBoundingClientRect();
+      
+      if (isIntersecting(noteRect, dynamicYAxisRect)) {
+        elm.style.backgroundColor = '#e8f6fa';
+      } else if (isIntersecting(noteRect, dynamicXAxisRect)) {
+        elm.style.backgroundColor = '#fcf9dc';
+      } else {
+        elm.style.backgroundColor = getBasePostItColor(elm);
+      }
+      
+      const hide = isIntersecting(noteRect, dynamicYAxisRect) || isIntersecting(noteRect, dynamicXAxisRect);
+      if (elm.pill) elm.pill.style.display = hide ? "none" : "block";
+      const delIcon = elm.querySelector('.delete-icon');
+      if (delIcon) delIcon.style.display = hide ? "none" : "block";
     }
 
     function makeDraggablePostit(elm) {
@@ -630,7 +651,7 @@
       const notes = document.querySelectorAll('.post-it');
       const filteredNotes = Array.from(notes).filter(note => !note.closest('.dock-slot'));
       
-      // Get all red numbered stickers on the whiteboard (class "sticker numbered-sticker")
+      // Get all red numbered stickers on the whiteboard (they have class "sticker numbered-sticker")
       const redStickers = Array.from(document.querySelectorAll('.sticker.numbered-sticker'));
       
       // Create table data with header using Pill X and Pill Y values
@@ -641,18 +662,14 @@
       filteredNotes.forEach(note => {
         const contentEl = note.querySelector('.content');
         const text = contentEl ? contentEl.innerText.trim() : "";
-        
-        // Parse the left and top values
         const leftPx = parseFloat(note.style.left) || 0;
         const topPx = parseFloat(note.style.top) || 0;
-        
-        // Calculate pill values: left edge = 0, right edge = 100; bottom = 0, top = 100.
+        // Calculate pill values relative to the grid
         const pillX = Math.round(((leftPx - gridLeft) / gridWidth) * 100);
         const pillY = Math.round(((gridTop + gridHeight - topPx) / gridHeight) * 100);
-        
         const noteColor = note.dataset.color || note.style.backgroundColor || "N/A";
         
-        // Determine overlapping red sticker (if any)
+        // Check for overlapping red numbered sticker
         const noteRect = note.getBoundingClientRect();
         let ranking = "";
         for (let sticker of redStickers) {
@@ -669,7 +686,7 @@
         tableData.push([text, pillX + "%", pillY + "%", noteColor, ranking]);
       });
 
-      // Capture whiteboard image
+      // Capture the full whiteboard as an image
       html2canvas(whiteboard, { backgroundColor: null }).then((canvas) => {
         const imgData = canvas.toDataURL("image/png");
         const { jsPDF } = window.jspdf;
@@ -677,9 +694,9 @@
         const margin = 10;
         const pdfWidth = doc.internal.pageSize.getWidth() - margin * 2;
         const pdfImgHeight = canvas.height * (pdfWidth / canvas.width);
-        // Add whiteboard image at the top
+        // Add whiteboard image at the top of the PDF
         doc.addImage(imgData, 'PNG', margin, margin, pdfWidth, pdfImgHeight);
-        // Position table below the image
+        // Set startY for the table below the image
         const startY = margin + pdfImgHeight + margin;
         doc.autoTable({
           head: [tableData[0]],
