@@ -133,7 +133,7 @@
     .axis {
       position: absolute;
       background: #000;
-      z-index: 1;
+      z-index: 1; /* Axes behind Post-its (which start at z=2). */
     }
     #x-axis {
       height: 2px;
@@ -269,8 +269,6 @@
 
     // Grid dimensions
     const gridLeft = 50, gridTop = 0, gridWidth = 1200, gridHeight = 800;
-    const yAxisRect = { left: gridLeft, top: gridTop, right: gridLeft + 2, bottom: gridTop + gridHeight };
-    const xAxisRect = { left: gridLeft, top: gridTop + gridHeight - 2, right: gridLeft + gridWidth, bottom: gridTop + gridHeight };
 
     // Z-index counters
     let postItZ = 2;
@@ -307,7 +305,7 @@
       }
     }
 
-    // updatePill is used only for on-screen display (the PDF table uses its own calculation)
+    // On-canvas pill display
     function updatePill(elm, newX, newY) {
       let relativeX = Math.round(((newX - gridLeft) / gridWidth) * 100);
       let relativeY = Math.round((1 - ((newY - gridTop) / gridHeight)) * 100);
@@ -362,12 +360,14 @@
       postit.className = 'post-it dock-postit';
       postit.dataset.color = color;
       postit.style.backgroundColor = getBasePostItColor(postit);
+
       const content = document.createElement('div');
       content.className = 'content';
       content.contentEditable = true;
       content.innerText = "New Post-it";
       content.addEventListener('mousedown', (e) => e.stopPropagation());
       content.addEventListener('touchstart', (e) => e.stopPropagation());
+
       postit.appendChild(content);
       slot.innerHTML = "";
       slot.appendChild(postit);
@@ -379,15 +379,21 @@
       if (slot.classList.contains('dock-slot')) {
         const rect = elm.getBoundingClientRect();
         const wbRect = whiteboard.getBoundingClientRect();
+        // clamp so note remains on the board
         const newLeft = clamp(rect.left - wbRect.left, 0, wbRect.width - elm.offsetWidth);
         const newTop = clamp(rect.top - wbRect.top, 0, wbRect.height - elm.offsetHeight);
+
         whiteboard.appendChild(elm);
         elm.style.left = newLeft + "px";
         elm.style.top = newTop + "px";
         elm.style.zIndex = postItZ++;
         elm.classList.remove("dock-postit");
         addDeleteIcon(elm);
+
+        // Re-create the original note in the dock
         createDockPostit(elm.dataset.color, slot);
+
+        // Create a pill for the new note
         const pill = document.createElement('div');
         pill.className = 'pill';
         pill.innerText = "0%, 0%";
@@ -406,23 +412,30 @@
       elm.style.top = newY + 'px';
       updatePill(elm, newX, newY);
       
-      // Recalculate axis positions based on the grid's current bounding rectangle:
+      // Dynamically compute axis overlap
       const gridRect = grid.getBoundingClientRect();
-      const dynamicYAxisRect = { left: gridRect.left, top: gridRect.top, right: gridRect.left + 2, bottom: gridRect.bottom };
-      const dynamicXAxisRect = { left: gridRect.left, top: gridRect.bottom - 2, right: gridRect.right, bottom: gridRect.bottom };
-      
-      // Use note's current viewport coordinates
+      // We treat left side +2 as y-axis
+      const dynamicYAxis = gridRect.left + 2;
+      // We treat bottom -2 as x-axis
+      const dynamicXAxis = gridRect.bottom - 2;
+
+      // noteRect in viewport coords
       const noteRect = elm.getBoundingClientRect();
       
-      if (isIntersecting(noteRect, dynamicYAxisRect)) {
-        elm.style.backgroundColor = '#e8f6fa';
-      } else if (isIntersecting(noteRect, dynamicXAxisRect)) {
-        elm.style.backgroundColor = '#fcf9dc';
+      // Overlaps y-axis if note's left side is < dynamicYAxis - whiteboard's left
+      const overlapsYAxis = (noteRect.left < dynamicYAxis);
+      // Overlaps x-axis if note's bottom is > dynamicXAxis
+      const overlapsXAxis = (noteRect.bottom > dynamicXAxis);
+
+      if (overlapsYAxis) {
+        elm.style.backgroundColor = '#e8f6fa'; // Light blue
+      } else if (overlapsXAxis) {
+        elm.style.backgroundColor = '#fcf9dc'; // Light yellow
       } else {
         elm.style.backgroundColor = getBasePostItColor(elm);
       }
-      
-      const hide = isIntersecting(noteRect, dynamicYAxisRect) || isIntersecting(noteRect, dynamicXAxisRect);
+
+      const hide = overlapsYAxis || overlapsXAxis;
       if (elm.pill) elm.pill.style.display = hide ? "none" : "block";
       const delIcon = elm.querySelector('.delete-icon');
       if (delIcon) delIcon.style.display = hide ? "none" : "block";
@@ -662,14 +675,36 @@
       filteredNotes.forEach(note => {
         const contentEl = note.querySelector('.content');
         const text = contentEl ? contentEl.innerText.trim() : "";
+        
+        // Pill value calculation
         const leftPx = parseFloat(note.style.left) || 0;
         const topPx = parseFloat(note.style.top) || 0;
-        // Calculate pill values relative to the grid
         const pillX = Math.round(((leftPx - gridLeft) / gridWidth) * 100);
         const pillY = Math.round(((gridTop + gridHeight - topPx) / gridHeight) * 100);
-        const noteColor = note.dataset.color || note.style.backgroundColor || "N/A";
+
+        // Retrieve the *computed* color in case it's changed to axis color
+        let computedColor = window.getComputedStyle(note).backgroundColor.trim().toLowerCase();
         
-        // Check for overlapping red numbered sticker
+        // Convert RGBA -> RGB if alpha=1
+        if (computedColor.startsWith("rgba")) {
+          const match = computedColor.match(/^rgba\(([^,]+),([^,]+),([^,]+),([^,]+)\)$/);
+          if (match && parseFloat(match[4]) === 1) {
+            computedColor = `rgb(${match[1].trim()}, ${match[2].trim()}, ${match[3].trim()})`;
+          }
+        }
+
+        // Check for light-blue or light-yellow in rgb form
+        let displayColor;
+        if (computedColor === "rgb(232, 246, 250)") {   // #e8f6fa
+          displayColor = "light-blue";
+        } else if (computedColor === "rgb(252, 249, 220)") {  // #fcf9dc
+          displayColor = "light-yellow";
+        } else {
+          // Fallback to the note's data attribute or the computed color
+          displayColor = note.dataset.color || computedColor || "N/A";
+        }
+
+        // Check if a red numbered sticker overlaps
         const noteRect = note.getBoundingClientRect();
         let ranking = "";
         for (let sticker of redStickers) {
@@ -683,7 +718,8 @@
             break;
           }
         }
-        tableData.push([text, pillX + "%", pillY + "%", noteColor, ranking]);
+        
+        tableData.push([text, pillX + "%", pillY + "%", displayColor, ranking]);
       });
 
       // Capture the full whiteboard as an image
@@ -694,8 +730,10 @@
         const margin = 10;
         const pdfWidth = doc.internal.pageSize.getWidth() - margin * 2;
         const pdfImgHeight = canvas.height * (pdfWidth / canvas.width);
+
         // Add whiteboard image at the top of the PDF
         doc.addImage(imgData, 'PNG', margin, margin, pdfWidth, pdfImgHeight);
+
         // Set startY for the table below the image
         const startY = margin + pdfImgHeight + margin;
         doc.autoTable({
@@ -726,6 +764,7 @@
       createDockBasicSticker("orange-sticker", orangeStickerSlot);
       createDockBasicSticker("red-sticker", redStickerSlot);
     }
+
     initializeDock();
     initializeStickerSlots();
   </script>
