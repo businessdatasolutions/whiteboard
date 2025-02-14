@@ -154,7 +154,6 @@
     /* ---------------------------
        STICKER-SPECIFIC STYLING
        --------------------------- */
-    /* Sticker while in the dock */
     .dock-sticker {
       width: 40px;
       height: 40px;
@@ -167,7 +166,6 @@
       position: static;
       cursor: move;
     }
-    /* Sticker once placed on the board */
     .sticker {
       position: absolute;
       width: 40px;
@@ -180,35 +178,32 @@
       font-size: 16px;
       cursor: move;
       user-select: none;
-      /* Large z-index so it’s always above Post-its */
       z-index: 999999;
     }
-
     .numbered-sticker {
       background-color: #ff2400; /* scarlet red */
       color: white;
     }
-
     .green-sticker {
-        background-color: #00ff18;
-        color: white;
+      background-color: #00ff18;
+      color: white;
     }
-
     .yellow-sticker {
-        background-color: #ffeb05;
-        color: black;
+      background-color: #ffeb05;
+      color: black;
     }
-
     .orange-sticker {
-        background-color: #ff8001;
-        color: black;
+      background-color: #ff8001;
+      color: black;
     }
-
     .red-sticker {
-        background-color: #ff2400;
-        color: white;
+      background-color: #ff2400;
+      color: white;
     }
   </style>
+  <!-- Include jsPDF and AutoTable from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
   <!-- Toolbar -->
@@ -218,6 +213,10 @@
     </a>
     <a class="waves-effect waves-light btn" id="uploadBackgroundBtn">
       <i class="material-icons left">image</i>Upload Background
+    </a>
+    <!-- New Export PDF Button -->
+    <a class="waves-effect waves-light btn" id="exportPDFBtn">
+      <i class="material-icons left">picture_as_pdf</i>Export Notes PDF
     </a>
     <input type="file" id="uploadBackground" accept="image/*" style="display: none;">
   </div>
@@ -233,26 +232,19 @@
     <div id="pill-container"></div>
     <!-- Dock container with fixed slots -->
     <div id="dock">
-      <!-- Four post-it slots -->
       <div class="dock-slot" data-color="yellow"></div>
       <div class="dock-slot" data-color="pink"></div>
       <div class="dock-slot" data-color="blue"></div>
       <div class="dock-slot" data-color="green"></div>
-      
-      <!-- Numbered sticker slot -->
       <div class="dock-slot" id="numbered-sticker-slot"></div>
-
-      <!-- Additional colored sticker slots -->
       <div class="dock-slot" id="green-sticker-slot"></div>
       <div class="dock-slot" id="yellow-sticker-slot"></div>
       <div class="dock-slot" id="orange-sticker-slot"></div>
       <div class="dock-slot" id="red-sticker-slot"></div>
-
     </div>
   </div>
 
   <!-- Scripts -->
-  <!-- Materialize JS and html2canvas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script>
@@ -266,36 +258,32 @@
     const uploadBackgroundBtn = document.getElementById('uploadBackgroundBtn');
     const uploadBackgroundInput = document.getElementById('uploadBackground');
     const dock = document.getElementById('dock');
-    const stickerSlot = document.getElementById('sticker-slot'); // Existing sticker slot
+    const exportPDFBtn = document.getElementById('exportPDFBtn'); // PDF export button
 
-    // New sticker slots
+    // Sticker slots
     const numberedStickerSlot = document.getElementById('numbered-sticker-slot');
     const greenStickerSlot = document.getElementById('green-sticker-slot');
     const yellowStickerSlot = document.getElementById('yellow-sticker-slot');
     const orangeStickerSlot = document.getElementById('orange-sticker-slot');
     const redStickerSlot = document.getElementById('red-sticker-slot');
 
-    // Grid parameters and axis rectangles
+    // Grid dimensions
     const gridLeft = 50, gridTop = 0, gridWidth = 1200, gridHeight = 800;
     const yAxisRect = { left: gridLeft, top: gridTop, right: gridLeft + 2, bottom: gridTop + gridHeight };
     const xAxisRect = { left: gridLeft, top: gridTop + gridHeight - 2, right: gridLeft + gridWidth, bottom: gridTop + gridHeight };
 
-    // Global z-index counters
-    let postItZ = 2;      // Post-its go upward from 2
-    let stickerZ = 100001; // Stickers start at a high z-index
-    let stickerCount = 1;  // Sticker numbering for the numbered stickers
-    let basicStickerCount = 1; // Counter for the basic color stickers
-
-    // The current drag state (used by the drag manager)
+    // Z-index counters
+    let postItZ = 2;
+    let stickerZ = 100001;
+    let stickerCount = 1;
+    let basicStickerCount = 1;
     let currentDrag = null;
 
     /********************
      * HELPER FUNCTIONS *
      ********************/
-    // Clamp a value between min and max.
     const clamp = (val, min, max) => Math.max(min, Math.min(val, max));
 
-    // Return clientX/clientY from mouse or touch event.
     function getClientCoords(e) {
       if (e.touches && e.touches.length > 0) {
         return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
@@ -303,7 +291,6 @@
       return { clientX: e.clientX, clientY: e.clientY };
     }
 
-    // Check if two rectangles intersect.
     function isIntersecting(rect1, rect2) {
       return !(rect1.right < rect2.left ||
                rect1.left > rect2.right ||
@@ -311,17 +298,16 @@
                rect1.top > rect2.bottom);
     }
 
-    // Get the base color for a post-it based on its data attribute.
     function getBasePostItColor(elm) {
       switch(elm.dataset.color) {
         case "pink":  return "#ffc0cb";
         case "blue":  return "#add8e6";
         case "green": return "#90ee90";
-        default:      return "#fffb8f"; // yellow by default
+        default:      return "#fffb8f";
       }
     }
 
-    // Update the pill element (which shows the relative position)
+    // updatePill remains as before (used for on-screen display)
     function updatePill(elm, newX, newY) {
       let relativeX = Math.round(((newX - gridLeft) / gridWidth) * 100);
       let relativeY = Math.round((1 - ((newY - gridTop) / gridHeight)) * 100);
@@ -332,7 +318,6 @@
       }
     }
 
-    // Add a delete icon to a post-it element.
     function addDeleteIcon(elm) {
       const del = document.createElement('div');
       del.className = 'delete-icon';
@@ -348,7 +333,6 @@
     /*********************
      * DRAG MANAGER      *
      *********************/
-    // Global mouse and touch move/end handlers use the currentDrag object.
     document.addEventListener('mousemove', (e) => {
       if (currentDrag && currentDrag.onDragMove) {
         currentDrag.onDragMove(e);
@@ -373,49 +357,37 @@
     /*************************************
      * POST-IT CREATION AND DRAGGING     *
      *************************************/
-    // Create a new dock post-it for a given color in a given slot.
     function createDockPostit(color, slot) {
       const postit = document.createElement('div');
       postit.className = 'post-it dock-postit';
       postit.dataset.color = color;
-      // Set background color based on color.
       postit.style.backgroundColor = getBasePostItColor(postit);
-
       const content = document.createElement('div');
       content.className = 'content';
       content.contentEditable = true;
       content.innerText = "New Post-it";
-      // Prevent the content area from interfering with dragging.
       content.addEventListener('mousedown', (e) => e.stopPropagation());
       content.addEventListener('touchstart', (e) => e.stopPropagation());
-
       postit.appendChild(content);
-      // Clear the slot and append the new post-it.
       slot.innerHTML = "";
       slot.appendChild(postit);
-      // Make the post-it draggable.
       makeDraggablePostit(postit);
     }
 
-    // When a post-it is dragged from a dock slot, reparent it to the whiteboard.
     function reparentFromDock(elm) {
       const slot = elm.parentElement;
       if (slot.classList.contains('dock-slot')) {
         const rect = elm.getBoundingClientRect();
         const wbRect = whiteboard.getBoundingClientRect();
-        const newLeft = rect.left - wbRect.left;
-        const newTop = rect.top - wbRect.top;
+        const newLeft = clamp(rect.left - wbRect.left, 0, wbRect.width - elm.offsetWidth);
+        const newTop = clamp(rect.top - wbRect.top, 0, wbRect.height - elm.offsetHeight);
         whiteboard.appendChild(elm);
         elm.style.left = newLeft + "px";
         elm.style.top = newTop + "px";
         elm.style.zIndex = postItZ++;
         elm.classList.remove("dock-postit");
         addDeleteIcon(elm);
-
-        // Replace the dock post-it.
         createDockPostit(elm.dataset.color, slot);
-
-        // Create and attach a pill for the used post-it.
         const pill = document.createElement('div');
         pill.className = 'pill';
         pill.innerText = "0%, 0%";
@@ -425,48 +397,21 @@
       }
     }
 
-    // Handle dragging for post-its.
     function handlePostItDrag(e, elm, startOffsetX, startOffsetY) {
       const { clientX, clientY } = getClientCoords(e);
-      const boardRect = whiteboard.getBoundingClientRect();
-      let newX = clamp(clientX - boardRect.left - startOffsetX, 0, boardRect.width - elm.offsetWidth);
-      let newY = clamp(clientY - boardRect.top - startOffsetY, 0, boardRect.height - elm.offsetHeight);
+      const wbRect = whiteboard.getBoundingClientRect();
+      let newX = clamp(clientX - wbRect.left - startOffsetX, 0, wbRect.width - elm.offsetWidth);
+      let newY = clamp(clientY - wbRect.top - startOffsetY, 0, wbRect.height - elm.offsetHeight);
       elm.style.left = newX + 'px';
       elm.style.top = newY + 'px';
       updatePill(elm, newX, newY);
-
-      // Determine the rectangle of the post-it.
-      const noteRect = {
-        left: newX,
-        top: newY,
-        right: newX + elm.offsetWidth,
-        bottom: newY + elm.offsetHeight
-      };
-
-      // Change background color when intersecting axes.
-      if (isIntersecting(noteRect, yAxisRect)) {
-        elm.style.backgroundColor = '#e8f6fa';
-      } else if (isIntersecting(noteRect, xAxisRect)) {
-        elm.style.backgroundColor = '#fcf9dc';
-      } else {
-        elm.style.backgroundColor = getBasePostItColor(elm);
-      }
-
-      // Toggle pill and delete icon visibility based on axis intersection.
-      const hide = isIntersecting(noteRect, yAxisRect) || isIntersecting(noteRect, xAxisRect);
-      if (elm.pill) elm.pill.style.display = hide ? "none" : "block";
-      const delIcon = elm.querySelector('.delete-icon');
-      if (delIcon) delIcon.style.display = hide ? "none" : "block";
     }
 
-    // Make a post-it element draggable.
     function makeDraggablePostit(elm) {
       elm.addEventListener('mousedown', (e) => {
-        // If in a dock, reparent it.
         if (elm.parentElement.classList.contains('dock-slot')) {
           reparentFromDock(elm);
         }
-        // Bring the element to the front.
         elm.style.zIndex = postItZ++;
         const { clientX, clientY } = getClientCoords(e);
         const rect = elm.getBoundingClientRect();
@@ -477,11 +422,10 @@
           startOffsetX: offsetX,
           startOffsetY: offsetY,
           onDragMove: (ev) => handlePostItDrag(ev, elm, offsetX, offsetY),
-          onDragEnd: () => {} // (No special cleanup needed.)
+          onDragEnd: () => {}
         };
         e.preventDefault();
       });
-
       elm.addEventListener('touchstart', (e) => {
         if (elm.parentElement.classList.contains('dock-slot')) {
           reparentFromDock(elm);
@@ -502,57 +446,45 @@
       }, { passive: false });
     }
 
-     /*************************************
+    /*************************************
      * BASIC STICKER CREATION AND DRAGGING (Non-numbered) *
      *************************************/
-
-    // Create a new dock sticker with the given color.
     function createDockBasicSticker(colorClass, slot) {
       const sticker = document.createElement('div');
       sticker.className = `dock-sticker ${colorClass}`;
       slot.innerHTML = "";
       slot.appendChild(sticker);
-      makeDraggableBasicSticker(sticker, colorClass); // Pass colorClass for replacement
+      makeDraggableBasicSticker(sticker, colorClass);
     }
-
-    // Reparent a basic sticker from the dock to the whiteboard.
     function reparentBasicStickerFromDock(elm, colorClass) {
       const slot = elm.parentElement;
       if (slot.classList.contains('dock-slot')) {
         const rect = elm.getBoundingClientRect();
         const wbRect = whiteboard.getBoundingClientRect();
-        const newLeft = rect.left - wbRect.left;
-        const newTop = rect.top - wbRect.top;
+        const newLeft = clamp(rect.left - wbRect.left, 0, wbRect.width - elm.offsetWidth);
+        const newTop = clamp(rect.top - wbRect.top, 0, wbRect.height - elm.offsetHeight);
         whiteboard.appendChild(elm);
         elm.style.left = newLeft + "px";
         elm.style.top = newTop + "px";
         elm.classList.remove("dock-sticker");
         elm.classList.add("sticker");
         elm.style.zIndex = stickerZ++;
-
-        // Preserve the color class
-        elm.className = `sticker ${colorClass}`;  //Add the colorClass for the dragged element
-
-        // Replace the dock sticker with a new one of the same color.
+        elm.className = `sticker ${colorClass}`;
         createDockBasicSticker(colorClass, slot);
       }
     }
-
-    // Handle basic sticker dragging.
     function handleBasicStickerDrag(e, elm, startOffsetX, startOffsetY) {
       const { clientX, clientY } = getClientCoords(e);
-      const boardRect = whiteboard.getBoundingClientRect();
-      let newX = clamp(clientX - boardRect.left - startOffsetX, 0, boardRect.width - elm.offsetWidth);
-      let newY = clamp(clientY - boardRect.top - startOffsetY, 0, boardRect.height - elm.offsetHeight);
+      const wbRect = whiteboard.getBoundingClientRect();
+      let newX = clamp(clientX - wbRect.left - startOffsetX, 0, wbRect.width - elm.offsetWidth);
+      let newY = clamp(clientY - wbRect.top - startOffsetY, 0, wbRect.height - elm.offsetHeight);
       elm.style.left = newX + 'px';
       elm.style.top = newY + 'px';
     }
-
-    // Make a basic sticker element draggable.
     function makeDraggableBasicSticker(elm, colorClass) {
       elm.addEventListener('mousedown', (e) => {
         if (elm.classList.contains('dock-sticker')) {
-          reparentBasicStickerFromDock(elm, colorClass);  // Pass colorClass
+          reparentBasicStickerFromDock(elm, colorClass);
         }
         elm.style.zIndex = stickerZ++;
         const { clientX, clientY } = getClientCoords(e);
@@ -568,10 +500,9 @@
         };
         e.preventDefault();
       });
-
       elm.addEventListener('touchstart', (e) => {
         if (elm.classList.contains('dock-sticker')) {
-          reparentBasicStickerFromDock(elm, colorClass); // Pass colorClass
+          reparentBasicStickerFromDock(elm, colorClass);
         }
         elm.style.zIndex = stickerZ++;
         const { clientX, clientY } = getClientCoords(e);
@@ -589,11 +520,9 @@
       }, { passive: false });
     }
 
-
     /*************************************
      * STICKER CREATION AND DRAGGING     *
      *************************************/
-    // Create a new dock sticker with the given number.
     function createDockSticker(slot) {
       const sticker = document.createElement('div');
       sticker.className = 'dock-sticker numbered-sticker';
@@ -602,38 +531,31 @@
       slot.appendChild(sticker);
       makeDraggableSticker(sticker);
     }
-
-    // Reparent a sticker from the dock to the whiteboard.
     function reparentStickerFromDock(elm) {
       const slot = elm.parentElement;
       if (slot.classList.contains('dock-slot')) {
         const rect = elm.getBoundingClientRect();
         const wbRect = whiteboard.getBoundingClientRect();
-        const newLeft = rect.left - wbRect.left;
-        const newTop = rect.top - wbRect.top;
+        const newLeft = clamp(rect.left - wbRect.left, 0, wbRect.width - elm.offsetWidth);
+        const newTop = clamp(rect.top - wbRect.top, 0, wbRect.height - elm.offsetHeight);
         whiteboard.appendChild(elm);
         elm.style.left = newLeft + "px";
         elm.style.top = newTop + "px";
         elm.classList.remove("dock-sticker");
         elm.classList.add("sticker");
-        elm.classList.add("numbered-sticker"); // Add class on whiteboard
+        elm.classList.add("numbered-sticker");
         elm.style.zIndex = stickerZ++;
-        // Immediately replace the dock sticker.
-        createDockSticker(slot); // Pass slot
+        createDockSticker(slot);
       }
     }
-
-    // Handle sticker dragging.
     function handleStickerDrag(e, elm, startOffsetX, startOffsetY) {
       const { clientX, clientY } = getClientCoords(e);
-      const boardRect = whiteboard.getBoundingClientRect();
-      let newX = clamp(clientX - boardRect.left - startOffsetX, 0, boardRect.width - elm.offsetWidth);
-      let newY = clamp(clientY - boardRect.top - startOffsetY, 0, boardRect.height - elm.offsetHeight);
+      const wbRect = whiteboard.getBoundingClientRect();
+      let newX = clamp(clientX - wbRect.left - startOffsetX, 0, wbRect.width - elm.offsetWidth);
+      let newY = clamp(clientY - wbRect.top - startOffsetY, 0, wbRect.height - elm.offsetHeight);
       elm.style.left = newX + 'px';
       elm.style.top = newY + 'px';
     }
-
-    // Make a sticker element draggable.
     function makeDraggableSticker(elm) {
       elm.addEventListener('mousedown', (e) => {
         if (elm.classList.contains('dock-sticker')) {
@@ -653,7 +575,6 @@
         };
         e.preventDefault();
       });
-
       elm.addEventListener('touchstart', (e) => {
         if (elm.classList.contains('dock-sticker')) {
           reparentStickerFromDock(elm);
@@ -687,13 +608,11 @@
           whiteboard.style.backgroundImage = `url(${e.target.result})`;
           whiteboard.style.backgroundSize = "cover";
           whiteboard.style.backgroundPosition = "center";
-          // Optionally remove grid lines:
           grid.style.backgroundImage = "none";
         }
         reader.readAsDataURL(this.files[0]);
       }
     });
-
     saveBtn.addEventListener('click', () => {
       html2canvas(whiteboard, { backgroundColor: null }).then((canvas) => {
         const link = document.createElement('a');
@@ -702,6 +621,76 @@
         link.click();
       });
     });
+
+    /*************************************
+     * EXPORT NOTES AS PDF FUNCTION      *
+     *************************************/
+    function exportNotesToPDF() {
+      // Select all post-it elements not inside a dock slot
+      const notes = document.querySelectorAll('.post-it');
+      const filteredNotes = Array.from(notes).filter(note => !note.closest('.dock-slot'));
+      
+      // Get all red numbered stickers on the whiteboard (class "sticker numbered-sticker")
+      const redStickers = Array.from(document.querySelectorAll('.sticker.numbered-sticker'));
+      
+      // Create table data with header using Pill X and Pill Y values
+      const tableData = [
+        ["Text", "Pill X", "Pill Y", "Note Color", "Ranking"]
+      ];
+      
+      filteredNotes.forEach(note => {
+        const contentEl = note.querySelector('.content');
+        const text = contentEl ? contentEl.innerText.trim() : "";
+        
+        // Parse the left and top values
+        const leftPx = parseFloat(note.style.left) || 0;
+        const topPx = parseFloat(note.style.top) || 0;
+        
+        // Calculate pill values: left edge = 0, right edge = 100; bottom = 0, top = 100.
+        const pillX = Math.round(((leftPx - gridLeft) / gridWidth) * 100);
+        const pillY = Math.round(((gridTop + gridHeight - topPx) / gridHeight) * 100);
+        
+        const noteColor = note.dataset.color || note.style.backgroundColor || "N/A";
+        
+        // Determine overlapping red sticker (if any)
+        const noteRect = note.getBoundingClientRect();
+        let ranking = "";
+        for (let sticker of redStickers) {
+          const stickerRect = sticker.getBoundingClientRect();
+          const overlap = !(stickerRect.right < noteRect.left ||
+                            stickerRect.left > noteRect.right ||
+                            stickerRect.bottom < noteRect.top ||
+                            stickerRect.top > noteRect.bottom);
+          if (overlap) {
+            ranking = sticker.textContent.trim();
+            break;
+          }
+        }
+        tableData.push([text, pillX + "%", pillY + "%", noteColor, ranking]);
+      });
+
+      // Capture whiteboard image
+      html2canvas(whiteboard, { backgroundColor: null }).then((canvas) => {
+        const imgData = canvas.toDataURL("image/png");
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const margin = 10;
+        const pdfWidth = doc.internal.pageSize.getWidth() - margin * 2;
+        const pdfImgHeight = canvas.height * (pdfWidth / canvas.width);
+        // Add whiteboard image at the top
+        doc.addImage(imgData, 'PNG', margin, margin, pdfWidth, pdfImgHeight);
+        // Position table below the image
+        const startY = margin + pdfImgHeight + margin;
+        doc.autoTable({
+          head: [tableData[0]],
+          body: tableData.slice(1),
+          styles: { fontSize: 8 },
+          startY: startY
+        });
+        doc.save("notes.pdf");
+      });
+    }
+    exportPDFBtn.addEventListener('click', exportNotesToPDF);
 
     /*************************************
      * INITIALIZATION                    *
@@ -713,19 +702,13 @@
         createDockPostit(colors[index], slot);
       });
     }
-
     function initializeStickerSlots() {
-        // Initialize the original numbered sticker
-        createDockSticker(numberedStickerSlot);
-
-        // Initialize the basic color stickers
-        createDockBasicSticker("green-sticker", greenStickerSlot);
-        createDockBasicSticker("yellow-sticker", yellowStickerSlot);
-        createDockBasicSticker("orange-sticker", orangeStickerSlot);
-        createDockBasicSticker("red-sticker", redStickerSlot);
+      createDockSticker(numberedStickerSlot);
+      createDockBasicSticker("green-sticker", greenStickerSlot);
+      createDockBasicSticker("yellow-sticker", yellowStickerSlot);
+      createDockBasicSticker("orange-sticker", orangeStickerSlot);
+      createDockBasicSticker("red-sticker", redStickerSlot);
     }
-
-    // Run initialization on load.
     initializeDock();
     initializeStickerSlots();
   </script>
