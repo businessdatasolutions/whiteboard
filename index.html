@@ -133,7 +133,7 @@
     .axis {
       position: absolute;
       background: #000;
-      z-index: 1; /* Axes behind Post-its (which start at z=2). */
+      z-index: 1; /* Axes behind Memos (which start at z=2). */
     }
     #x-axis {
       height: 2px;
@@ -386,11 +386,11 @@
     /*************************************
      * MEMO CREATION AND DRAGGING     * // Changed from POST-IT to MEMO
      *************************************/
-    function createDockPostit(color, slot) {
-      const postit = document.createElement('div');
-      postit.className = 'post-it dock-postit';
-      postit.dataset.color = color;
-      postit.style.backgroundColor = getBasePostItColor(postit);
+    function createDockMemo(color, slot) { // Changed from createDockPostit to createDockMemo
+      const memo = document.createElement('div'); // Changed from postit to memo
+      memo.className = 'memo dock-memo'; // Changed from postit to memo and post-it to memo
+      memo.dataset.color = color; // Changed from postit to memo
+      memo.style.backgroundColor = getBaseMemoColor(memo); // Changed from postit to memo and getBasePostItColor to getBaseMemoColor
 
       const content = document.createElement('div');
       content.className = 'content';
@@ -399,7 +399,7 @@
       content.addEventListener('mousedown', (e) => e.stopPropagation());
       content.addEventListener('touchstart', (e) => e.stopPropagation());
 
-      postit.appendChild(content);
+      memo.appendChild(content); // Changed from postit to memo
       slot.innerHTML = "";
       slot.appendChild(memo); // Changed from postit to memo
       makeDraggableMemo(memo); // Changed from makeDraggablePostit to makeDraggableMemo
@@ -422,7 +422,7 @@
         addDeleteIcon(elm);
 
         // Re-create the original note in the dock
-        createDockPostit(elm.dataset.color, slot);
+        createDockMemo(elm.dataset.color, slot); // Changed from createDockPostit to createDockMemo
 
         // Create a pill for the new note
         const pill = document.createElement('div');
@@ -442,7 +442,7 @@
       elm.style.left = newX + 'px';
       elm.style.top = newY + 'px';
       updatePill(elm, newX, newY);
-      
+
       // Dynamically compute axis overlap
       const gridRect = grid.getBoundingClientRect();
       // We treat left side +2 as y-axis
@@ -452,7 +452,7 @@
 
       // noteRect in viewport coords
       const noteRect = elm.getBoundingClientRect();
-      
+
       // Overlaps y-axis if note's left side is < dynamicYAxis - whiteboard's left
       const overlapsYAxis = (noteRect.left < dynamicYAxis);
       // Overlaps x-axis if note's bottom is > dynamicXAxis
@@ -706,7 +706,7 @@
       filteredNotes.forEach(note => {
         const contentEl = note.querySelector('.content');
         const text = contentEl ? contentEl.innerText.trim() : "";
-        
+
         // Pill value calculation
         const leftPx = parseFloat(note.style.left) || 0;
         const topPx = parseFloat(note.style.top) || 0;
@@ -715,7 +715,7 @@
 
         // Retrieve the *computed* color in case it's changed to axis color
         let computedColor = window.getComputedStyle(note).backgroundColor.trim().toLowerCase();
-        
+
         // Convert RGBA -> RGB if alpha=1
         if (computedColor.startsWith("rgba")) {
           const match = computedColor.match(/^rgba\(([^,]+),([^,]+),([^,]+),([^,]+)\)$/);
@@ -749,7 +749,7 @@
             break;
           }
         }
-        
+
         tableData.push([text, pillX + "%", pillY + "%", displayColor, ranking]);
       });
 
@@ -772,8 +772,9 @@
         const pdfWidth = doc.internal.pageSize.getWidth() - margin * 2;
         const pdfImgHeight = canvas.height * (pdfWidth / canvas.width);
 
-        // Add whiteboard image at the top of the PDF
-        doc.addImage(imgData, 'PNG', margin, margin, pdfWidth, pdfImgHeight);
+        // Add whiteboard image below context or at the top if no context
+        doc.addImage(imgData, 'PNG', margin, currentY, pdfWidth, pdfImgHeight);
+        currentY += pdfImgHeight + margin;
 
         // Set startY for the table below the image
         doc.autoTable({
