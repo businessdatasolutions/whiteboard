@@ -1,10 +1,11 @@
 # Free Whiteboard App
 
-The **Whiteboard App** is an interactive, client‑side canvas built with HTML, CSS, and JavaScript. It allows you to create, move, and customize visual elements in real time—all with an intuitive drag‑and‑drop interface.
+The **Free Whiteboard App** is an interactive, client‑side canvas built with HTML, CSS, and JavaScript. It allows you to create, move, and customize visual elements in real time—all with an intuitive drag‑and‑drop interface.
 
 ## Features
 
 ### Post-it Notes
+
 - **Drag and Drop:**  
   Easily drag colorful Post-it notes from the dock onto the whiteboard canvas.
 - **Dock Replacement:**  
@@ -17,6 +18,7 @@ The **Whiteboard App** is an interactive, client‑side canvas built with HTML, 
   A small **delete icon** (“×”) appears in the top left of each Post-it (except when over an axis) so you can remove notes with a click.
 
 ### Stickers
+
 - **Sticker Functionality:**  
   In addition to Post-it notes, the dock now includes a sticker slot.
 - **Numbered Stickers:**  
@@ -29,14 +31,17 @@ The **Whiteboard App** is an interactive, client‑side canvas built with HTML, 
   Stickers have a high z‑index, ensuring they remain visible above all Post-it notes and other elements.
 
 ### Background Customization
+
 - **Upload Background:**  
   Replace the default grid by clicking the **Upload Background** button. Select an image file to personalize your whiteboard.
 
 ### Save as PNG
+
 - **Capture Your Work:**  
   Click the **Save as PNG** button to capture the entire whiteboard—including Post-its, stickers, and your custom background—as a high‑quality PNG image.
 
 ### Export as PDF
+
 - **Whiteboard Image Capture:**  
   The entire whiteboard (including background, Post-it notes, and stickers) is captured as an image and added to the top of the PDF.
 - **Detailed Notes Table:**  
@@ -49,6 +54,7 @@ The **Whiteboard App** is an interactive, client‑side canvas built with HTML, 
   This feature provides an easy-to-read summary of all the notes on your whiteboard.
 
 ### Enhanced Interactivity & Performance
+
 - **Touch & Mouse Support:**  
   Enjoy smooth drag‑and‑drop interactions on both desktop and mobile devices.
 - **Refactored Drag Manager:**  
@@ -72,25 +78,20 @@ Try it out [here](https://businessdatasolutions.github.io/whiteboard/)
 
    - **Post-it Notes:**  
      Drag a Post-it from the right‑hand dock onto the canvas. Click inside the Post-it to edit its content, and watch the position pill update automatically. To delete a Post-it, click the "×" icon.
-     
    - **Stickers:**  
      Drag the numbered sticker from the dock onto the canvas. If a red numbered sticker overlaps a Post-it, its number is used as the note’s ranking. A new sticker will instantly replace the one you dragged.
-     
    - **Axes & Grid:**  
      When a Post-it is moved over an axis, it changes color and the position pill (and delete icon) temporarily hide, emphasizing the axis.
-     
    - **Upload Background:**  
      Click the **Upload Background** button, select an image file, and the whiteboard’s background will change from the grid to your chosen image.
-     
    - **Save as PNG:**  
      Click the **Save as PNG** button to capture your whiteboard as a PNG image that you can download and share.
-     
    - **Export as PDF:**  
      Click the **Export Notes PDF** button to generate a PDF. The PDF will display an image of your entire whiteboard at the top, followed by a table listing:
-       - Note text.
-       - Pill X and Pill Y values (relative positions).
-       - Note color.
-       - Ranking (if a red numbered sticker overlaps the note).
+     - Note text.
+     - Pill X and Pill Y values (relative positions).
+     - Note color.
+     - Ranking (if a red numbered sticker overlaps the note).
 
 ## Technologies Used
 
